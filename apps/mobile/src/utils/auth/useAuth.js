@@ -1,0 +1,131 @@
+import { router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { useCallback, useEffect, useState } from 'react';
+import { useAuthStore, authTokenKey, authUserKey } from './store';
+import {
+  login as loginService,
+  register as registerService,
+  loginWithGoogle as loginWithGoogleService,
+} from '@/services/auth';
+
+
+/**
+ * This hook provides authentication functionality.
+ * It may be easier to use the `useAuthModal` or `useRequireAuth` hooks
+ * instead as those will also handle showing authentication to the user
+ * directly.
+ */
+export const useAuth = () => {
+ const { isReady, auth, setAuth } = useAuthStore();
+  const [loading, setLoading] = useState(false);
+
+  const initiate = useCallback(() => {
+    Promise.all([
+      SecureStore.getItemAsync(authTokenKey),
+      SecureStore.getItemAsync(authUserKey),
+    ])
+      .then(([token, userRaw]) => {
+        const user = userRaw ? JSON.parse(userRaw) : null;
+        useAuthStore.setState({
+          auth: token && user ? { token, user } : null,
+          isReady: true,
+        });
+      })
+      .catch(() => {
+        useAuthStore.setState({ auth: null, isReady: true });
+      });
+  }, []);
+
+  const signIn = useCallback(() => {
+    router.push('/(auth)/login');
+  }, []);
+
+  const signUp = useCallback(() => {
+    router.push('/(auth)/login');
+  }, []);
+
+  const signOut = useCallback(() => {
+    setAuth(null);
+  }, [setAuth]);
+
+  const signInWithEmail = useCallback(
+    async (email, password) => {
+      try {
+        setLoading(true);
+        const { token, user } = await loginService(email, password);
+        setAuth({ token, user });
+        return true;
+      } catch (error) {
+        console.error('Login error:', error);
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setAuth],
+  );
+
+  const registerWithEmail = useCallback(
+    async (name, email, password) => {
+      try {
+        setLoading(true);
+        const { token, user } = await registerService(name, email, password);
+        setAuth({ token, user });
+        return true;
+      } catch (error) {
+        console.error('Register error:', error);
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setAuth],
+  );
+
+  const signInWithGoogle = useCallback(
+    async (idToken) => {
+      try {
+        setLoading(true);
+        const { token, user } = await loginWithGoogleService(idToken);
+        setAuth({ token, user });
+        return true;
+      } catch (error) {
+        console.error('Google login error:', error);
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setAuth],
+  );
+
+  return {
+    isReady,
+    isAuthenticated: isReady ? !!auth : null,
+    signIn,
+    signOut,
+    signUp,
+    auth,
+    setAuth,
+    initiate,
+    signInWithEmail,
+    registerWithEmail,
+    signInWithGoogle,
+    loading,
+  };
+};
+
+/**
+ * This hook will automatically open the authentication modal if the user is not authenticated.
+ */
+export const useRequireAuth = (options) => {
+  const { isAuthenticated, isReady } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated && isReady) {
+      router.push('/(auth)/login');
+    }
+  }, [isAuthenticated, options?.mode, isReady]);
+};
+
+export default useAuth;

@@ -1,0 +1,8 @@
+# OS/editor artifacts
+.DS_Store
+
+# Local archives/backups
+*.zip
+
+# Dependency/build caches
+apps/mobile/caches/
