@@ -1,26 +1,32 @@
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/utils/auth/useAuth';
+import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import { useAuth } from '@/utils/auth/useAuth';
 
 WebBrowser.maybeCompleteAuthSession();
 
+type Mode = 'login' | 'register';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Architecture: authentication screen (email/password + Google OAuth entrypoint).
 export default function Login() {
   const { signInWithEmail, registerWithEmail, signInWithGoogle, loading } = useAuth();
+  const [mode, setMode] = useState<Mode>('login');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [errorMessage, setErrorMessage] = useState('');
 
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -29,63 +35,76 @@ export default function Login() {
     scopes: ['profile', 'email'],
   });
 
+  const title = useMemo(() => (mode === 'login' ? 'Entrar na conta' : 'Criar conta'), [mode]);
+  const actionLabel = useMemo(() => (mode === 'login' ? 'Entrar' : 'Criar conta'), [mode]);
+
   useEffect(() => {
-    if (response?.type === 'success') {
-      const idToken = response.authentication?.idToken;
-      if (idToken) {
-        signInWithGoogle(idToken).then((ok) => {
-          if (ok) {
-            router.back();
-          } else {
-            alert('Erro ao fazer login com Google');
-          }
-        });
-      }
+    if (!response) return;
+
+    if (response.type === 'error') {
+      setErrorMessage('Nao foi possivel autenticar com Google.');
+      return;
     }
+
+    if (response.type !== 'success') return;
+
+    const idToken = response.authentication?.idToken;
+    if (!idToken) {
+      setErrorMessage('Google nao retornou token de acesso.');
+      return;
+    }
+
+    signInWithGoogle(idToken).then((result) => {
+      if (result.ok) {
+        router.replace('/(tabs)');
+        return;
+      }
+      setErrorMessage(result.error || 'Falha no login com Google.');
+    });
   }, [response, signInWithGoogle]);
 
-  async function handleLogin() {
-    setErrorMessage('');
-    if (!email.trim() || !password.trim()) {
-      setErrorMessage('Preencha email e senha.');
-      return;
+  function validateForm() {
+    const emailValue = email.trim().toLowerCase();
+
+    if (mode === 'register' && !name.trim()) {
+      return { ok: false, message: 'Informe seu nome.' };
     }
 
-    const emailValue = email.trim().toLowerCase();
-    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue);
-    if (!emailOk) {
-      setErrorMessage('Email inválido.');
-      return;
+    if (!emailValue || !password.trim()) {
+      return { ok: false, message: 'Preencha email e senha.' };
+    }
+
+    if (!EMAIL_REGEX.test(emailValue)) {
+      return { ok: false, message: 'Email invalido.' };
     }
 
     if (password.trim().length < 6) {
-      setErrorMessage('A senha deve ter pelo menos 6 caracteres.');
+      return { ok: false, message: 'A senha deve ter ao menos 6 caracteres.' };
+    }
+
+    return { ok: true, message: '', emailValue };
+  }
+
+  async function handleSubmit() {
+    setErrorMessage('');
+
+    const validation = validateForm();
+    if (!validation.ok || !validation.emailValue) {
+      setErrorMessage(validation.message);
       return;
     }
 
-    if (mode === 'register' && !name.trim()) {
-      setErrorMessage('Preencha seu nome.');
-      return;
-    }
-
-    const success =
+    const result =
       mode === 'register'
-        ? await registerWithEmail(
-            name.trim(),
-            emailValue,
-            password,
-          )
-        : await signInWithEmail(emailValue, password);
+        ? await registerWithEmail(name.trim(), validation.emailValue, password)
+        : await signInWithEmail(validation.emailValue, password);
 
-    if (success) {
-      router.back();
-    } else {
-      setErrorMessage(
-        mode === 'register'
-          ? 'Erro ao criar conta. Verifique seus dados.'
-          : 'Email ou senha incorretos.',
-      );
+    if (!result.ok) {
+      setErrorMessage(result.error || 'Falha na autenticacao.');
+      return;
     }
+
+    router.replace('/(tabs)');
   }
 
   return (
@@ -93,112 +112,114 @@ export default function Login() {
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.header}>
-        <Text style={styles.brand}>⚽ GolMaster</Text>
-        <Text style={styles.subtitle}>Faça login para continuar</Text>
-      </View>
-
-      <View style={styles.card}>
-        {mode === 'register' && (
-          <>
-            <Text style={styles.label}>Nome</Text>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              autoCapitalize="words"
-              placeholder="Seu nome"
-              placeholderTextColor="#9CA3AF"
-              style={styles.input}
-            />
-          </>
-        )}
-
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="seu@email.com"
-          placeholderTextColor="#9CA3AF"
-          style={styles.input}
-        />
-
-        <Text style={styles.label}>Senha</Text>
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          placeholder="Sua senha"
-          placeholderTextColor="#9CA3AF"
-          style={styles.input}
-        />
-
-        {errorMessage ? (
-          <Text style={styles.errorText}>{errorMessage}</Text>
-        ) : null}
-
-        <TouchableOpacity
-          onPress={handleLogin}
-          disabled={loading}
-          style={[styles.primaryButton, loading && styles.buttonDisabled]}
-        >
-          <Text style={styles.primaryButtonText}>
-            {loading
-              ? mode === 'register'
-                ? 'Cadastrando...'
-                : 'Entrando...'
-              : mode === 'register'
-                ? 'Criar conta'
-                : 'Entrar'}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.divider} />
-          <Text style={styles.dividerText}>ou</Text>
-          <View style={styles.divider} />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={styles.brand}>GolMaster</Text>
+          <Text style={styles.subtitle}>Acesse sua conta para continuar.</Text>
         </View>
 
-        <TouchableOpacity
-          onPress={() => promptAsync()}
-          disabled={!request || loading}
-          style={[
-            styles.googleButton,
-            (!request || loading) && styles.buttonDisabled,
-          ]}
-        >
-          <Text style={styles.googleButtonText}>Entrar com Google</Text>
-        </TouchableOpacity>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{title}</Text>
 
-        {mode === 'login' && (
-          <TouchableOpacity
-            onPress={() =>
-              setErrorMessage(
-                'Recuperação de senha ainda não habilitada. Use o cadastro ou Google.',
-              )
-            }
-            style={styles.linkButton}
+          {mode === 'register' ? (
+            <>
+              <Text style={styles.label}>Nome</Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                autoCorrect={false}
+                placeholder="Seu nome"
+                placeholderTextColor="#9CA3AF"
+                style={styles.input}
+              />
+            </>
+          ) : null}
+
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            autoCorrect={false}
+            placeholder="seu@email.com"
+            placeholderTextColor="#9CA3AF"
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Senha</Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Sua senha"
+            placeholderTextColor="#9CA3AF"
+            style={styles.input}
+          />
+
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+          <Pressable
+            onPress={handleSubmit}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              (pressed || loading) && styles.buttonDisabled,
+            ]}
           >
-            <Text style={styles.linkButtonText}>Esqueci minha senha</Text>
-          </TouchableOpacity>
-        )}
+            <Text style={styles.primaryButtonText}>
+              {loading ? 'Carregando...' : actionLabel}
+            </Text>
+          </Pressable>
 
-        <TouchableOpacity
-          onPress={() => setMode(mode === 'login' ? 'register' : 'login')}
-          style={styles.linkButton}
-        >
-          <Text style={styles.linkButtonText}>
-            {mode === 'login'
-              ? 'Nao tem conta? Cadastre-se'
-              : 'Ja tem conta? Fazer login'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.dividerRow}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>ou</Text>
+            <View style={styles.divider} />
+          </View>
 
-      <Text style={styles.helperText}>
-        Use seu Google para acessar rapidamente.
-      </Text>
+          <Pressable
+            onPress={() => {
+              setErrorMessage('');
+              promptAsync();
+            }}
+            disabled={!request || loading}
+            style={({ pressed }) => [
+              styles.googleButton,
+              (!request || loading || pressed) && styles.buttonDisabled,
+            ]}
+          >
+            <Text style={styles.googleButtonText}>Continuar com Google</Text>
+          </Pressable>
+
+          {mode === 'login' ? (
+            <Pressable onPress={() => setErrorMessage('Recuperacao de senha ainda nao habilitada.')}>
+              <Text style={styles.linkText}>Esqueci minha senha</Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable
+            onPress={() => {
+              setErrorMessage('');
+              setMode((prev) => (prev === 'login' ? 'register' : 'login'));
+            }}
+          >
+            <Text style={styles.linkText}>
+              {mode === 'login'
+                ? 'Nao tem conta? Crie agora'
+                : 'Ja tem conta? Entre aqui'}
+            </Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -206,75 +227,85 @@ export default function Login() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
-    paddingHorizontal: 24,
+    backgroundColor: '#F3F4F6',
+  },
+  content: {
+    flexGrow: 1,
     justifyContent: 'center',
+    paddingHorizontal: 22,
+    paddingVertical: 24,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 20,
     alignItems: 'center',
   },
   brand: {
-    fontSize: 28,
-    fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: 0.2,
-    marginBottom: 6,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   subtitle: {
-    fontSize: 14,
+    marginTop: 6,
     color: '#64748B',
+    fontSize: 14,
   },
   card: {
+    borderRadius: 18,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowRadius: 18,
+    elevation: 4,
+  },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
   },
   label: {
-    fontSize: 13,
-    color: '#334155',
+    marginTop: 10,
     marginBottom: 6,
-    marginTop: 8,
+    fontSize: 13,
     fontWeight: '600',
+    color: '#334155',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
     backgroundColor: '#F9FAFB',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
     color: '#111827',
-    marginBottom: 8,
-  },
-  primaryButton: {
-    marginTop: 12,
-    backgroundColor: '#15803D',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 15,
+    fontSize: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
   },
   errorText: {
-    marginTop: 4,
-    color: '#DC2626',
+    marginTop: 10,
+    color: '#B91C1C',
     fontSize: 12,
     fontWeight: '600',
   },
+  primaryButton: {
+    marginTop: 14,
+    borderRadius: 10,
+    backgroundColor: '#166534',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
   dividerRow: {
+    marginVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 16,
   },
   divider: {
     flex: 1,
@@ -283,39 +314,31 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     marginHorizontal: 10,
+    color: '#94A3B8',
     fontSize: 12,
-    color: '#9CA3AF',
     fontWeight: '600',
   },
   googleButton: {
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingVertical: 12,
+    borderColor: '#D1D5DB',
     borderRadius: 10,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
+    paddingVertical: 12,
   },
   googleButtonText: {
     color: '#111827',
-    fontWeight: '700',
     fontSize: 15,
+    fontWeight: '700',
   },
-  linkButton: {
-    marginTop: 14,
-    alignItems: 'center',
-  },
-  linkButtonText: {
-    color: '#15803D',
-    fontWeight: '600',
+  linkText: {
+    marginTop: 13,
+    textAlign: 'center',
+    color: '#166534',
     fontSize: 13,
+    fontWeight: '600',
   },
   buttonDisabled: {
-    opacity: 0.6,
-  },
-  helperText: {
-    marginTop: 16,
-    textAlign: 'center',
-    color: '#9CA3AF',
-    fontSize: 12,
+    opacity: 0.65,
   },
 });

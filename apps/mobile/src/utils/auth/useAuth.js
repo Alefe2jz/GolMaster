@@ -19,6 +19,24 @@ export const useAuth = () => {
  const { isReady, auth, setAuth } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
+  // Architecture: maps transport/service errors to stable UI messages.
+  const getErrorMessage = useCallback((error, fallbackMessage) => {
+    const apiMessage = error?.response?.data?.error;
+    if (typeof apiMessage === 'string' && apiMessage.trim().length > 0) {
+      return apiMessage;
+    }
+
+    if (error?.code === 'ECONNABORTED') {
+      return 'Tempo de conexao esgotado. Tente novamente.';
+    }
+
+    if (error?.message === 'Network Error') {
+      return 'Nao foi possivel conectar ao servidor. Verifique a API.';
+    }
+
+    return fallbackMessage;
+  }, []);
+
   const initiate = useCallback(() => {
     Promise.all([
       SecureStore.getItemAsync(authTokenKey),
@@ -54,15 +72,18 @@ export const useAuth = () => {
         setLoading(true);
         const { token, user } = await loginService(email, password);
         setAuth({ token, user });
-        return true;
+        return { ok: true, error: null };
       } catch (error) {
         console.error('Login error:', error);
-        return false;
+        return {
+          ok: false,
+          error: getErrorMessage(error, 'Email ou senha invalidos.'),
+        };
       } finally {
         setLoading(false);
       }
     },
-    [setAuth],
+    [getErrorMessage, setAuth],
   );
 
   const registerWithEmail = useCallback(
@@ -71,15 +92,18 @@ export const useAuth = () => {
         setLoading(true);
         const { token, user } = await registerService(name, email, password);
         setAuth({ token, user });
-        return true;
+        return { ok: true, error: null };
       } catch (error) {
         console.error('Register error:', error);
-        return false;
+        return {
+          ok: false,
+          error: getErrorMessage(error, 'Nao foi possivel criar a conta.'),
+        };
       } finally {
         setLoading(false);
       }
     },
-    [setAuth],
+    [getErrorMessage, setAuth],
   );
 
   const signInWithGoogle = useCallback(
@@ -88,15 +112,18 @@ export const useAuth = () => {
         setLoading(true);
         const { token, user } = await loginWithGoogleService(idToken);
         setAuth({ token, user });
-        return true;
+        return { ok: true, error: null };
       } catch (error) {
         console.error('Google login error:', error);
-        return false;
+        return {
+          ok: false,
+          error: getErrorMessage(error, 'Falha no login com Google.'),
+        };
       } finally {
         setLoading(false);
       }
     },
-    [setAuth],
+    [getErrorMessage, setAuth],
   );
 
   return {

@@ -8,6 +8,7 @@ import { FriendsController } from "../controllers/FriendsController";
 import { SettingsController } from "../controllers/SettingsController";
 import { SyncController } from "../controllers/SyncController";
 
+// Architecture: API route map (HTTP endpoint -> controller entrypoint).
 const router = Router();
 
 // health

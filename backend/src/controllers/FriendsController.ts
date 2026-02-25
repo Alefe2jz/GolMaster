@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 
+const toParamString = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
+
 const buildStatsMap = async (userIds: string[]) => {
   if (userIds.length === 0) return new Map<string, any>();
   const totals = await prisma.prediction.groupBy({
@@ -127,7 +130,10 @@ export class FriendsController {
   static async respond(req: Request, res: Response) {
     try {
       const userId = req.userId;
-      const { id } = req.params;
+      const id = toParamString(req.params.id);
+      if (!id) {
+        return res.status(400).json({ error: "Missing friendship id" });
+      }
       const { action } = req.body || {};
 
       const friendship = await prisma.friend.findUnique({ where: { id } });
@@ -165,7 +171,10 @@ export class FriendsController {
   static async remove(req: Request, res: Response) {
     try {
       const userId = req.userId;
-      const { id } = req.params;
+      const id = toParamString(req.params.id);
+      if (!id) {
+        return res.status(400).json({ error: "Missing friendship id" });
+      }
       const friendship = await prisma.friend.findUnique({ where: { id } });
       if (!friendship) {
         return res.status(404).json({ error: "Friendship not found" });

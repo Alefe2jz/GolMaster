@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 
+const toParamString = (value: string | string[] | undefined) =>
+  Array.isArray(value) ? value[0] : value;
+
 const toMatchResponse = (match: any) => ({
   id: match.id,
   home_team_name: match.homeTeamName,
@@ -47,7 +50,10 @@ export class MatchesController {
 
   static async show(req: Request, res: Response) {
     try {
-      const { id } = req.params;
+      const id = toParamString(req.params.id);
+      if (!id) {
+        return res.status(400).json({ error: "Missing match id" });
+      }
       const match = await prisma.match.findUnique({ where: { id } });
       if (!match) {
         return res.status(404).json({ error: "Match not found" });
