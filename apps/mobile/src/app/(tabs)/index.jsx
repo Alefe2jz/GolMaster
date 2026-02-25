@@ -11,7 +11,7 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/utils/auth/useAuth";
-import { Calendar, MapPin, Tv, Users } from "lucide-react-native";
+import { Calendar, MapPin, Tv } from "lucide-react-native";
 import { api } from "@/services/api";
 
 export default function HomeScreen() {
@@ -292,32 +292,34 @@ export default function HomeScreen() {
       >
         <View
           style={{
-            flexDirection: "row",
+            width: "100%",
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "center",
           }}
         >
-          <View>
+          <View style={{ alignItems: "center" }}>
             <Text
-              style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}
+              style={{
+                fontSize: 24,
+                fontWeight: "bold",
+                color: "#1F2937",
+                textAlign: "center",
+              }}
             >
               ⚽ GolMaster
             </Text>
-            <Text style={{ fontSize: 14, color: "#6B7280", marginTop: 2 }}>
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#6B7280",
+                marginTop: 2,
+                textAlign: "center",
+              }}
+            >
               Copa do Mundo 2026
             </Text>
           </View>
 
-          {isAuthenticated && (
-            <TouchableOpacity
-              style={{ padding: 8 }}
-              onPress={() => {
-                /* TODO: Navigate to profile */
-              }}
-            >
-              <Users size={24} color="#6B7280" />
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* Stage Filter */}

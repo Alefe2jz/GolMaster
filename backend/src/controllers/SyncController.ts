@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
+import { syncMatchesFromWc2026Api } from "../services/matchSync";
 
 const buildStats = async (userId: string) => {
   const totalMatches = await prisma.match.count();
@@ -40,14 +41,23 @@ export class SyncController {
   static async sync(req: Request, res: Response) {
     try {
       const userId = req.userId;
+      const syncResult = await syncMatchesFromWc2026Api();
       const stats = await buildStats(userId);
       return res.json({
         ok: true,
-        matches_updated: 0,
-        new_matches: 0,
+        matches_updated: syncResult.updatedMatches,
+        new_matches: syncResult.newMatches,
+        api_matches_received: syncResult.apiMatches,
+        data_source: "wc2026api",
         ...stats,
       });
     } catch (error) {
+      if (error instanceof Error && error.message.includes("WC2026_API_KEY")) {
+        return res.status(400).json({
+          error: "WC2026_API_KEY is not configured",
+          hint: "Configure WC2026_API_KEY to enable external match sync",
+        });
+      }
       console.error("POST /api/sync-fifa error:", error);
       return res.status(500).json({ error: "Failed to sync FIFA data" });
     }
