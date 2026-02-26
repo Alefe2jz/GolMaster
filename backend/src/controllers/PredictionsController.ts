@@ -77,4 +77,36 @@ export class PredictionsController {
       return res.status(500).json({ error: "Failed to save prediction" });
     }
   }
+
+  static async remove(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+      const matchId = Array.isArray(req.params.matchId)
+        ? req.params.matchId[0]
+        : req.params.matchId;
+
+      if (!matchId) {
+        return res.status(400).json({ error: "Missing match id" });
+      }
+
+      const existing = await prisma.prediction.findUnique({
+        where: {
+          userId_matchId: { userId, matchId },
+        },
+      });
+
+      if (!existing) {
+        return res.status(404).json({ error: "Prediction not found" });
+      }
+
+      await prisma.prediction.delete({
+        where: { id: existing.id },
+      });
+
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error("DELETE /api/predictions/:matchId error:", error);
+      return res.status(500).json({ error: "Failed to remove prediction" });
+    }
+  }
 }

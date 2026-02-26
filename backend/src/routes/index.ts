@@ -30,6 +30,7 @@ router.post("/matches", auth, MatchesController.create);
 // predictions
 router.get("/predictions", auth, PredictionsController.index);
 router.post("/predictions", auth, PredictionsController.upsert);
+router.delete("/predictions/:matchId", auth, PredictionsController.remove);
 
 // friends
 router.get("/friends", auth, FriendsController.index);
