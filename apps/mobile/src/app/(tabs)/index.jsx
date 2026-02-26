@@ -94,10 +94,17 @@ export default function HomeScreen() {
     }
   };
 
+  const isNoScheduleTeam = (name) => {
+    if (!name) return false;
+    const normalized = String(name).trim().toLowerCase();
+    return normalized === "sem agenda marcada" || normalized === "tbd";
+  };
+
   const renderMatch = (match) => {
     const { date, time } = formatDate(match.match_date);
     const prediction = predictionMap[match.id];
-    const isFinished = match.status === "finished";
+    const homeNoSchedule = isNoScheduleTeam(match.home_team_name);
+    const awayNoSchedule = isNoScheduleTeam(match.away_team_name);
 
     return (
       <View
@@ -157,12 +164,18 @@ export default function HomeScreen() {
         >
           <View style={{ flex: 1, alignItems: "center" }}>
             <Text style={{ fontSize: 32, marginBottom: 4 }}>
-              {match.home_team_flag}
+              {homeNoSchedule ? "⏳" : match.home_team_flag || "🏳️"}
             </Text>
             <Text
-              style={{ fontSize: 14, fontWeight: "600", textAlign: "center" }}
+              style={{
+                fontSize: homeNoSchedule ? 12 : 14,
+                fontWeight: "600",
+                textAlign: "center",
+                color: homeNoSchedule ? "#64748B" : "#111827",
+                maxWidth: 120,
+              }}
             >
-              {match.home_team_name}
+              {homeNoSchedule ? "Sem agenda marcada" : match.home_team_name}
             </Text>
           </View>
 
@@ -186,12 +199,18 @@ export default function HomeScreen() {
 
           <View style={{ flex: 1, alignItems: "center" }}>
             <Text style={{ fontSize: 32, marginBottom: 4 }}>
-              {match.away_team_flag}
+              {awayNoSchedule ? "⏳" : match.away_team_flag || "🏳️"}
             </Text>
             <Text
-              style={{ fontSize: 14, fontWeight: "600", textAlign: "center" }}
+              style={{
+                fontSize: awayNoSchedule ? 12 : 14,
+                fontWeight: "600",
+                textAlign: "center",
+                color: awayNoSchedule ? "#64748B" : "#111827",
+                maxWidth: 120,
+              }}
             >
-              {match.away_team_name}
+              {awayNoSchedule ? "Sem agenda marcada" : match.away_team_name}
             </Text>
           </View>
         </View>

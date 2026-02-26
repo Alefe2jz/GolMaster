@@ -1,43 +1,84 @@
 # Arquitetura do GolMaster
 
-## 1. Estrutura do Monorepo
-- `apps/mobile`: app Expo (React Native) para usu√°rios finais.
-- `apps/web`: app web com React Router e rotas de servidor.
-- `backend`: API Node.js + Express e acesso a dados com Prisma.
-- `infra`: infraestrutura local (`docker-compose.yml`) com PostgreSQL.
+## 1. Estrutura do monorepo
+- `apps/mobile`: app Expo (React Native) para usu·rios finais.
+- `apps/web`: app web (React Router) e rotas server-side desse frontend.
+- `backend`: API Node.js + Express + Prisma.
+- `infra`: arquivos de infraestrutura local (`docker-compose.yml`).
 
-## 2. Arquitetura do Backend (Express + Prisma)
-- `backend/src/server.ts`: bootstrap do processo (carrega vari√°veis de ambiente e inicia o listener).
-- `backend/src/app.ts`: composi√ß√£o da aplica√ß√£o (middlewares, rota de health, montagem de `/api`).
-- `backend/src/routes/index.ts`: mapa de rotas que delega cada endpoint para controllers.
-- `backend/src/controllers/*`: regras de neg√≥cio por dom√≠nio (`auth`, `matches`, `friends`, etc.).
-- `backend/src/middlewares/auth.ts`: valida√ß√£o de JWT e inje√ß√£o do contexto do usu√°rio.
-- `backend/src/lib/prisma.ts`: inst√¢ncia √∫nica do cliente Prisma.
-- `backend/prisma/schema.prisma`: modelo relacional e contrato do banco de dados.
+## 2. Backend (Express + Prisma)
+- `backend/src/server.ts`: bootstrap do processo e inicializaÁ„o do listener.
+- `backend/src/app.ts`: middlewares globais, healthcheck e montagem do prefixo `/api`.
+- `backend/src/routes/index.ts`: mapa central de rotas HTTP.
+- `backend/src/controllers/*`: regras de negÛcio por domÌnio.
+- `backend/src/middlewares/auth.ts`: valida JWT e injeta `req.userId`.
+- `backend/src/lib/prisma.ts`: inst‚ncia ˙nica do Prisma Client.
+- `backend/prisma/schema.prisma`: contrato do banco (PostgreSQL).
 
-## 3. Arquitetura Mobile (Expo)
-- `apps/mobile/src/app/*`: telas baseadas em rotas (`(auth)`, `(tabs)`).
-- `apps/mobile/src/services/*`: camada de acesso HTTP (`axios`) para endpoints do backend.
-- `apps/mobile/src/utils/auth/*`: estado de autentica√ß√£o e ciclo de vida da sess√£o (SecureStore + Zustand).
-- `apps/mobile/polyfills/*`: adaptadores web/nativo para compatibilidade com o runtime do Expo.
+### 2.1 Rotas principais da API
+- `GET /api/health`
+- Auth:
+  - `POST /api/register`
+  - `POST /api/login`
+  - `POST /api/auth/google`
+- Matches:
+  - `GET /api/matches`
+  - `GET /api/matches/:id`
+  - `POST /api/matches` (auth)
+- Predictions:
+  - `GET /api/predictions` (auth)
+  - `POST /api/predictions` (auth)
+  - `DELETE /api/predictions/:matchId` (auth)  
+  Remove um palpite j· salvo para a partida.
+- Friends:
+  - `GET /api/friends` (auth)
+  - `POST /api/friends` (auth)
+  - `PUT /api/friends/:id` (auth)
+  - `DELETE /api/friends/:id` (auth)
+- User settings:
+  - `GET /api/user-settings` (auth)
+  - `PUT /api/user-settings` (auth)
+- Sync FIFA:
+  - `POST /api/sync-fifa` (auth)
+  - `GET /api/sync-fifa` (auth)
 
-## 4. Arquitetura Web (React Router)
-- `apps/web/src/app/*`: arquivos de rota e handlers de API.
-- `apps/web/src/__create/*`: utilit√°rios de integra√ß√£o gerados (manter edi√ß√µes manuais no m√≠nimo).
-- `apps/web/tsconfig.json`: verifica√ß√£o de tipos estrita para m√≥dulos TS e JS.
+## 3. Modelo de dados (Prisma)
+Entidades centrais:
+- `User`: inclui `friendCode` ˙nico para convites por ID.
+- `Friend`: relacionamento entre usu·rios (`pending`/`accepted`).
+- `Match`: jogos e metadados de calend·rio/est·dio/status/fase.
+- `Prediction`: palpite do usu·rio por jogo (`@@unique([userId, matchId])`).
+- `UserSettings`: idioma, timezone e notificaÁıes.
 
-## 5. Dados e Persist√™ncia
-- Banco de dados principal: PostgreSQL.
-- ORM: Prisma (`User`, `Match`, `Prediction`, `Friend`, `UserSettings`).
-- Banco de desenvolvimento local provisionado por `infra/docker-compose.yml`.
+## 4. Mobile (Expo)
+- Rotas em `apps/mobile/src/app`:
+  - `/(tabs)/index.jsx`: tela Jogos.
+  - `/(tabs)/predictions.jsx`: tela Palpites.
+  - `/(tabs)/friends.jsx`: tela Amigos.
+  - `/(tabs)/settings.jsx`: tela ConfiguraÁıes.
+- `apps/mobile/src/app/_layout.jsx`: bootstrap de sess„o e providers.
+- `apps/mobile/src/services/api.ts`: cliente Axios e header `Authorization`.
+- `apps/mobile/src/utils/auth/*`: sess„o local (SecureStore + Zustand).
 
-## 6. Fluxo de Autentica√ß√£o
-- Email/senha: tratado pelo backend (`/api/register`, `/api/login`).
-- Google OAuth (mobile): token √© recebido pelo app e validado pelo backend (`/api/auth/google`).
-- JWT: emitido pelo backend e reutilizado pelo mobile via `Authorization: Bearer <token>`.
+### 4.1 Comportamentos importantes no app
+- **Jogos**: filtro "Grupos" usa `stage=group_stage`, e o backend converte para `stage startsWith group_`.
+- **Palpites**: modal com contexto completo do jogo, salvar e cancelar/remover palpite.
+- **Amigos**: convite por `friend_id` (ID de amigo), n„o por email.
 
-## 7. Diretrizes de Manuten√ß√£o
-- Mantenha os controllers focados em l√≥gica de neg√≥cio e evite ramifica√ß√µes espec√≠ficas de transporte.
-- Reutilize `lib/prisma.ts` como fonte √∫nica do cliente de banco.
-- Adicione novos endpoints apenas por `routes/index.ts` + m√©todos dedicados no controller.
-- Prefira remover arquivos/m√≥dulos mortos em vez de manter placeholders sem uso.
+## 5. Fluxos de autenticaÁ„o
+- Email/senha: backend emite JWT.
+- Google OAuth (mobile): app recebe `id_token`, backend valida e emite JWT.
+- JWT È persistido no SecureStore e enviado no header Bearer nas rotas protegidas.
+
+## 6. Ambiente e deploy
+- Banco principal: PostgreSQL em nuvem (Neon).
+- API em nuvem: Render.
+- App mobile: build via EAS.
+- Sempre aplicar migraÁıes Prisma no ambiente cloud antes de liberar funcionalidades dependentes de schema.
+
+## 7. Diretrizes de manutenÁ„o
+- Adicionar endpoint novo sempre via `routes/index.ts` + controller dedicado.
+- Manter lÛgica de negÛcio concentrada em controllers/services, n„o em rotas.
+- Reutilizar `prisma` de `lib/prisma.ts`.
+- Evitar duplicaÁ„o de contrato entre backend e mobile; atualizar tipos de resposta no mobile quando payload mudar.
+- Em mudanÁas de banco, versionar migraÁ„o e validar compatibilidade com deploy incremental.
