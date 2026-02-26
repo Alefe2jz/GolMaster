@@ -10,11 +10,7 @@ import {
 } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
 import { useAuth } from '@/utils/auth/useAuth';
-
-WebBrowser.maybeCompleteAuthSession();
 
 type Mode = 'login' | 'register';
 
@@ -22,46 +18,17 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Architecture: authentication screen (email/password + Google OAuth entrypoint).
 export default function Login() {
-  const { signInWithEmail, registerWithEmail, signInWithGoogle, loading } = useAuth();
+  const { signInWithEmail, registerWithEmail, loading } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    scopes: ['profile', 'email'],
-  });
+  const googleEnabled = process.env.EXPO_PUBLIC_ENABLE_GOOGLE_LOGIN === 'true';
 
   const title = useMemo(() => (mode === 'login' ? 'Entrar na conta' : 'Criar conta'), [mode]);
   const actionLabel = useMemo(() => (mode === 'login' ? 'Entrar' : 'Criar conta'), [mode]);
-
-  useEffect(() => {
-    if (!response) return;
-
-    if (response.type === 'error') {
-      setErrorMessage('Nao foi possivel autenticar com Google.');
-      return;
-    }
-
-    if (response.type !== 'success') return;
-
-    const idToken = response.authentication?.idToken;
-    if (!idToken) {
-      setErrorMessage('Google nao retornou token de acesso.');
-      return;
-    }
-
-    signInWithGoogle(idToken).then((result) => {
-      if (result.ok) {
-        router.replace('/(tabs)');
-        return;
-      }
-      setErrorMessage(result.error || 'Falha no login com Google.');
-    });
-  }, [response, signInWithGoogle]);
 
   function validateForm() {
     const emailValue = email.trim().toLowerCase();
@@ -180,25 +147,18 @@ export default function Login() {
             </Text>
           </Pressable>
 
-          <View style={styles.dividerRow}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>ou</Text>
-            <View style={styles.divider} />
-          </View>
-
-          <Pressable
-            onPress={() => {
-              setErrorMessage('');
-              promptAsync();
-            }}
-            disabled={!request || loading}
-            style={({ pressed }) => [
-              styles.googleButton,
-              (!request || loading || pressed) && styles.buttonDisabled,
-            ]}
-          >
-            <Text style={styles.googleButtonText}>Continuar com Google</Text>
-          </Pressable>
+          {googleEnabled ? (
+            <>
+              <View style={styles.dividerRow}>
+                <View style={styles.divider} />
+                <Text style={styles.dividerText}>ou</Text>
+                <View style={styles.divider} />
+              </View>
+              <View style={styles.googleButton}>
+                <Text style={styles.googleButtonText}>Google habilitado via ambiente</Text>
+              </View>
+            </>
+          ) : null}
 
           {mode === 'login' ? (
             <Pressable onPress={() => setErrorMessage('Recuperacao de senha ainda nao habilitada.')}>

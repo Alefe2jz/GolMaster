@@ -60,11 +60,11 @@ export const useAuth = () => {
   }, []);
 
   const signIn = useCallback(() => {
-    router.push('/login');
+    router.push('/(auth)/login');
   }, []);
 
   const signUp = useCallback(() => {
-    router.push('/login');
+    router.push('/(auth)/login');
   }, []);
 
   const signOut = useCallback(() => {
@@ -155,7 +155,7 @@ export const useRequireAuth = (options) => {
 
   useEffect(() => {
     if (!isAuthenticated && isReady) {
-      router.push('/login');
+      router.push('/(auth)/login');
     }
   }, [isAuthenticated, options?.mode, isReady]);
 };
