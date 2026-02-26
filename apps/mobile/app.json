@@ -50,7 +50,10 @@
           }
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-asset",
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "web": {
       "bundler": "metro",
