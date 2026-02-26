@@ -178,7 +178,11 @@ export class MatchesController {
 
       const stageFilter = parseStageFilter(stageQuery);
       if (stageFilter && stageFilter.length > 0) {
-        where.stage = stageFilter;
+        if (stageFilter === "group_stage") {
+          where.stage = { startsWith: "group_" };
+        } else {
+          where.stage = stageFilter;
+        }
       }
 
       const statusFilter = parseStatusFilter(statusQuery);
