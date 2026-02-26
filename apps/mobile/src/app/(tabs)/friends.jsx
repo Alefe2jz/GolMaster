@@ -12,28 +12,20 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/utils/auth/useAuth";
-import {
-  Users,
-  UserPlus,
-  Trophy,
-  Mail,
-  X,
-  Check,
-  Clock,
-} from "lucide-react-native";
+import { Users, UserPlus, Hash, X, Check, Clock } from "lucide-react-native";
+import * as Clipboard from "expo-clipboard";
 import KeyboardAvoidingAnimatedView from "@/components/KeyboardAvoidingAnimatedView";
 import { api } from "@/services/api";
 
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, signIn } = useAuth();
+  const { isAuthenticated, signIn, auth } = useAuth();
   const queryClient = useQueryClient();
-  const [friendEmail, setFriendEmail] = useState("");
+  const [friendCode, setFriendCode] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTab, setSelectedTab] = useState("friends");
 
-  // Fetch friends
-  const { data: friendsData, isLoading } = useQuery({
+  const { data: friendsData } = useQuery({
     queryKey: ["friends", selectedTab],
     queryFn: async () => {
       if (!isAuthenticated) return { friends: [] };
@@ -44,18 +36,17 @@ export default function FriendsScreen() {
     enabled: isAuthenticated,
   });
 
-  // Add friend mutation
   const addFriendMutation = useMutation({
-    mutationFn: async (email) => {
+    mutationFn: async (inviteCode) => {
       const response = await api.post("/friends", {
-        friend_email: email,
+        friend_id: inviteCode,
       });
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["friends"] });
       setModalVisible(false);
-      setFriendEmail("");
+      setFriendCode("");
       Alert.alert("Sucesso", "Convite de amizade enviado!");
     },
     onError: (error) => {
@@ -63,13 +54,12 @@ export default function FriendsScreen() {
     },
   });
 
-  // Accept/decline friend mutation
   const respondFriendMutation = useMutation({
     mutationFn: async ({ friendshipId, action }) => {
       const response = await api.put(`/friends/${friendshipId}`, { action });
       return response.data;
     },
-    onSuccess: (data, { action }) => {
+    onSuccess: (_data, { action }) => {
       queryClient.invalidateQueries({ queryKey: ["friends"] });
       const message =
         action === "accept" ? "Amigo adicionado!" : "Convite recusado";
@@ -81,14 +71,26 @@ export default function FriendsScreen() {
   });
 
   const friends = friendsData?.friends || [];
+  const myFriendCode = auth?.user?.friendCode || "";
 
   const handleAddFriend = () => {
-    if (!friendEmail.trim()) {
-      Alert.alert("Erro", "Digite um email válido");
+    const inviteCode = friendCode.trim().toUpperCase();
+    if (!inviteCode) {
+      Alert.alert("Erro", "Digite um ID de amigo valido");
       return;
     }
 
-    addFriendMutation.mutate(friendEmail.trim().toLowerCase());
+    addFriendMutation.mutate(inviteCode);
+  };
+
+  const handleCopyFriendCode = async () => {
+    if (!myFriendCode) {
+      Alert.alert("Erro", "Seu ID de amigo ainda nao esta disponivel.");
+      return;
+    }
+
+    await Clipboard.setStringAsync(myFriendCode);
+    Alert.alert("Copiado", "Seu ID de amigo foi copiado.");
   };
 
   const handleFriendAction = (friendshipId, action) => {
@@ -97,7 +99,7 @@ export default function FriendsScreen() {
         ? "Tem certeza que deseja aceitar este convite?"
         : "Tem certeza que deseja recusar este convite?";
 
-    Alert.alert("Confirmação", message, [
+    Alert.alert("Confirmacao", message, [
       { text: "Cancelar", style: "cancel" },
       {
         text: action === "accept" ? "Aceitar" : "Recusar",
@@ -162,7 +164,7 @@ export default function FriendsScreen() {
                 <Text
                   style={{ fontSize: 16, fontWeight: "600", color: "#1F2937" }}
                 >
-                  {friend.name || "Usuário"}
+                  {friend.name || "Usuario"}
                 </Text>
                 <Text style={{ fontSize: 13, color: "#6B7280" }}>
                   {friend.email}
@@ -227,9 +229,7 @@ export default function FriendsScreen() {
           {isRequest && (
             <View style={{ flexDirection: "row", gap: 8 }}>
               <TouchableOpacity
-                onPress={() =>
-                  handleFriendAction(friend.friendship_id, "decline")
-                }
+                onPress={() => handleFriendAction(friend.friendship_id, "decline")}
                 style={{
                   backgroundColor: "#FEE2E2",
                   paddingHorizontal: 12,
@@ -241,9 +241,7 @@ export default function FriendsScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() =>
-                  handleFriendAction(friend.friendship_id, "accept")
-                }
+                onPress={() => handleFriendAction(friend.friendship_id, "accept")}
                 style={{
                   backgroundColor: "#DCFCE7",
                   paddingHorizontal: 12,
@@ -276,7 +274,7 @@ export default function FriendsScreen() {
           }}
         >
           <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>
-            👥 Amigos
+            Amigos
           </Text>
         </View>
 
@@ -298,19 +296,7 @@ export default function FriendsScreen() {
               textAlign: "center",
             }}
           >
-            Faça login para competir com amigos
-          </Text>
-          <Text
-            style={{
-              fontSize: 14,
-              color: "#6B7280",
-              marginTop: 8,
-              textAlign: "center",
-              lineHeight: 20,
-            }}
-          >
-            Entre com sua conta Google e adicione seus amigos para ver quem
-            acerta mais palpites
+            Faca login para competir com amigos
           </Text>
 
           <TouchableOpacity
@@ -339,7 +325,6 @@ export default function FriendsScreen() {
     >
       <StatusBar style="dark" />
 
-      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 16,
@@ -358,7 +343,7 @@ export default function FriendsScreen() {
           }}
         >
           <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>
-            👥 Amigos
+            Amigos
           </Text>
 
           <TouchableOpacity
@@ -380,7 +365,6 @@ export default function FriendsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Tabs */}
         <View
           style={{
             flexDirection: "row",
@@ -436,7 +420,6 @@ export default function FriendsScreen() {
         </View>
       </View>
 
-      {/* Friends List */}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -444,6 +427,34 @@ export default function FriendsScreen() {
           paddingBottom: insets.bottom + 20,
         }}
       >
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 12,
+            padding: 12,
+            backgroundColor: "#ECFDF5",
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: "#BBF7D0",
+          }}
+        >
+          <Text style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>
+            Seu ID de amigo
+          </Text>
+          <TouchableOpacity
+            onPress={handleCopyFriendCode}
+            style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+          >
+            <Hash size={16} color="#166534" />
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#14532D" }}>
+              {myFriendCode || "--"}
+            </Text>
+            <Text style={{ fontSize: 12, color: "#166534", marginLeft: "auto" }}>
+              Toque para copiar
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {friends.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 40 }}>
             {selectedTab === "friends" ? (
@@ -457,7 +468,7 @@ export default function FriendsScreen() {
                     marginTop: 16,
                   }}
                 >
-                  Você ainda não tem amigos
+                  Voce ainda nao tem amigos
                 </Text>
                 <Text
                   style={{
@@ -467,7 +478,7 @@ export default function FriendsScreen() {
                     marginTop: 4,
                   }}
                 >
-                  Adicione amigos pelo email para competir
+                  Adicione amigos pelo ID para competir
                 </Text>
               </>
             ) : (
@@ -483,16 +494,6 @@ export default function FriendsScreen() {
                 >
                   Nenhum convite pendente
                 </Text>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: "#9CA3AF",
-                    textAlign: "center",
-                    marginTop: 4,
-                  }}
-                >
-                  Os convites de amizade aparecerão aqui
-                </Text>
               </>
             )}
           </View>
@@ -501,7 +502,6 @@ export default function FriendsScreen() {
         )}
       </ScrollView>
 
-      {/* Add Friend Modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -544,7 +544,7 @@ export default function FriendsScreen() {
             </View>
 
             <Text style={{ fontSize: 14, color: "#6B7280", marginBottom: 12 }}>
-              Digite o email do seu amigo para enviar um convite de amizade:
+              Digite o ID do seu amigo para enviar um convite:
             </Text>
 
             <View
@@ -559,12 +559,11 @@ export default function FriendsScreen() {
                 alignItems: "center",
               }}
             >
-              <Mail size={20} color="#6B7280" />
+              <Hash size={20} color="#6B7280" />
               <TextInput
-                value={friendEmail}
-                onChangeText={setFriendEmail}
-                placeholder="email@exemplo.com"
-                keyboardType="email-address"
+                value={friendCode}
+                onChangeText={setFriendCode}
+                placeholder="GM-ABCD-1234"
                 autoCapitalize="none"
                 style={{
                   flex: 1,
@@ -603,9 +602,7 @@ export default function FriendsScreen() {
                 <Text
                   style={{ fontSize: 16, color: "white", fontWeight: "600" }}
                 >
-                  {addFriendMutation.isLoading
-                    ? "Enviando..."
-                    : "Enviar convite"}
+                  {addFriendMutation.isLoading ? "Enviando..." : "Enviar convite"}
                 </Text>
               </TouchableOpacity>
             </View>

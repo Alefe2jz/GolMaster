@@ -64,6 +64,7 @@ export class FriendsController {
           friendship_id: f.id,
           name: friendUser.name,
           email: friendUser.email,
+          friend_id: friendUser.friendCode,
           total_predictions: stats.total,
           correct_predictions: stats.correct,
           success_rate: successRate,
@@ -80,16 +81,18 @@ export class FriendsController {
   static async create(req: Request, res: Response) {
     try {
       const userId = req.userId;
-      const { friend_email } = req.body || {};
-      if (!friend_email) {
-        return res.status(400).json({ error: "Missing friend_email" });
+      const friendIdInput = String(req.body?.friend_id || "")
+        .trim()
+        .toUpperCase();
+      if (!friendIdInput) {
+        return res.status(400).json({ error: "Missing friend_id" });
       }
 
       const friendUser = await prisma.user.findUnique({
-        where: { email: String(friend_email).toLowerCase() },
+        where: { friendCode: friendIdInput },
       });
       if (!friendUser) {
-        return res.status(404).json({ error: "User not found" });
+        return res.status(404).json({ error: "Friend ID not found" });
       }
       if (friendUser.id === userId) {
         return res.status(400).json({ error: "Cannot add yourself" });

@@ -8,14 +8,24 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: "teste@golmaster.com" },
-    update: { name: "Teste", passwordHash },
-    create: { name: "Teste", email: "teste@golmaster.com", passwordHash },
+    update: { name: "Teste", passwordHash, friendCode: "GM-TEST-0001" },
+    create: {
+      name: "Teste",
+      email: "teste@golmaster.com",
+      passwordHash,
+      friendCode: "GM-TEST-0001",
+    },
   });
 
   const user2 = await prisma.user.upsert({
     where: { email: "amigo@golmaster.com" },
-    update: { name: "Amigo", passwordHash },
-    create: { name: "Amigo", email: "amigo@golmaster.com", passwordHash },
+    update: { name: "Amigo", passwordHash, friendCode: "GM-TEST-0002" },
+    create: {
+      name: "Amigo",
+      email: "amigo@golmaster.com",
+      passwordHash,
+      friendCode: "GM-TEST-0002",
+    },
   });
 
   await prisma.userSettings.upsert({

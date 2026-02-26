@@ -38,10 +38,15 @@ export const useAuth = () => {
   }, []);
 
   const initiate = useCallback(() => {
-    Promise.all([
+    const authBootstrap = Promise.all([
       SecureStore.getItemAsync(authTokenKey),
       SecureStore.getItemAsync(authUserKey),
-    ])
+    ]);
+    const timeout = new Promise((resolve) =>
+      setTimeout(() => resolve([null, null]), 8000),
+    );
+
+    Promise.race([authBootstrap, timeout])
       .then(([token, userRaw]) => {
         const user = userRaw ? JSON.parse(userRaw) : null;
         useAuthStore.setState({
@@ -55,11 +60,11 @@ export const useAuth = () => {
   }, []);
 
   const signIn = useCallback(() => {
-    router.push('/(auth)/login');
+    router.push('/login');
   }, []);
 
   const signUp = useCallback(() => {
-    router.push('/(auth)/login');
+    router.push('/login');
   }, []);
 
   const signOut = useCallback(() => {
@@ -150,7 +155,7 @@ export const useRequireAuth = (options) => {
 
   useEffect(() => {
     if (!isAuthenticated && isReady) {
-      router.push('/(auth)/login');
+      router.push('/login');
     }
   }, [isAuthenticated, options?.mode, isReady]);
 };

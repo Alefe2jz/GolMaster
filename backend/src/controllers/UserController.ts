@@ -9,6 +9,7 @@ export class UserController {
           id: true,
           name: true,
           email: true,
+          friendCode: true,
           image: true,
           createdAt: true,
         },

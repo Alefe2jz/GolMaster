@@ -6,6 +6,8 @@ type LoginResponse = {
     id: string;
     name: string;
     email: string;
+    friendCode: string;
+    image?: string | null;
   };
 };
 
