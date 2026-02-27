@@ -108,7 +108,8 @@ export class AuthController {
       });
 
       const payload = ticket.getPayload();
-      const email = payload?.email;
+      const emailRaw = payload?.email;
+      const email = emailRaw ? String(emailRaw).toLowerCase() : "";
       if (!email) {
         return res.status(401).json({ error: "Invalid Google token" });
       }
@@ -130,7 +131,7 @@ export class AuthController {
             data: { friendCode: await generateUniqueFriendCode() },
           });
 
-      const token = jwt.sign({ sub: user.id }, JWT_SECRET, {
+      const token = jwt.sign({ sub: userWithFriendCode.id }, JWT_SECRET, {
         expiresIn: "7d",
       });
 
@@ -146,6 +147,10 @@ export class AuthController {
       });
     } catch (error) {
       console.error("Google login error:", error);
+      if (error instanceof Error && /audience/i.test(error.message)) {
+        return res.status(401).json({ error: "Google token audience mismatch" });
+      }
+
       return res.status(401).json({ error: "Invalid Google token" });
     }
   }

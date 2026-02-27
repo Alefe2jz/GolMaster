@@ -10,25 +10,74 @@ import {
 } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 import { useAuth } from '@/utils/auth/useAuth';
 
 type Mode = 'login' | 'register';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+WebBrowser.maybeCompleteAuthSession();
 
 // Architecture: authentication screen (email/password + Google OAuth entrypoint).
 export default function Login() {
-  const { signInWithEmail, registerWithEmail, loading } = useAuth();
+  const { signInWithEmail, registerWithEmail, signInWithGoogle, loading } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const googleEnabled = process.env.EXPO_PUBLIC_ENABLE_GOOGLE_LOGIN === 'true';
+  const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+  const canUseGoogle =
+    googleEnabled && !!googleAndroidClientId && !!googleWebClientId;
+
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
+    androidClientId: googleAndroidClientId,
+    webClientId: googleWebClientId,
+    scopes: ['profile', 'email'],
+    selectAccount: true,
+  });
 
   const title = useMemo(() => (mode === 'login' ? 'Entrar na conta' : 'Criar conta'), [mode]);
   const actionLabel = useMemo(() => (mode === 'login' ? 'Entrar' : 'Criar conta'), [mode]);
+
+  useEffect(() => {
+    if (!response) return;
+
+    const run = async () => {
+      if (response.type !== 'success') {
+        if (response.type !== 'dismiss') {
+          setErrorMessage('Nao foi possivel completar o login com Google.');
+        }
+        return;
+      }
+
+      const idToken =
+        response.params?.id_token || response.authentication?.idToken || null;
+
+      if (!idToken) {
+        setErrorMessage('Google nao retornou token de autenticacao.');
+        return;
+      }
+
+      setGoogleLoading(true);
+      const result = await signInWithGoogle(idToken);
+      setGoogleLoading(false);
+
+      if (!result.ok) {
+        setErrorMessage(result.error || 'Falha no login com Google.');
+        return;
+      }
+
+      router.replace('/(tabs)');
+    };
+
+    run();
+  }, [response, signInWithGoogle]);
 
   function validateForm() {
     const emailValue = email.trim().toLowerCase();
@@ -72,6 +121,26 @@ export default function Login() {
     }
 
     router.replace('/(tabs)');
+  }
+
+  async function handleGoogleSignIn() {
+    setErrorMessage('');
+
+    if (!canUseGoogle) {
+      setErrorMessage('Google login nao configurado para esta build.');
+      return;
+    }
+
+    if (!request) {
+      setErrorMessage('Inicializacao do Google ainda nao concluida. Tente novamente.');
+      return;
+    }
+
+    try {
+      await promptAsync({ showInRecents: true });
+    } catch {
+      setErrorMessage('Falha ao abrir autenticacao do Google.');
+    }
   }
 
   return (
@@ -154,9 +223,24 @@ export default function Login() {
                 <Text style={styles.dividerText}>ou</Text>
                 <View style={styles.divider} />
               </View>
-              <View style={styles.googleButton}>
-                <Text style={styles.googleButtonText}>Google habilitado via ambiente</Text>
-              </View>
+              <Pressable
+                onPress={handleGoogleSignIn}
+                disabled={loading || googleLoading || !canUseGoogle || !request}
+                style={({ pressed }) => [
+                  styles.googleButton,
+                  (pressed || loading || googleLoading || !canUseGoogle || !request) &&
+                    styles.buttonDisabled,
+                ]}
+              >
+                <Text style={styles.googleButtonText}>
+                  {googleLoading ? 'Conectando com Google...' : 'Entrar com Google'}
+                </Text>
+              </Pressable>
+              {!canUseGoogle ? (
+                <Text style={styles.warningText}>
+                  Configure EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID e EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.
+                </Text>
+              ) : null}
             </>
           ) : null}
 
@@ -300,5 +384,11 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.65,
+  },
+  warningText: {
+    marginTop: 8,
+    fontSize: 11,
+    color: '#92400E',
+    textAlign: 'center',
   },
 });

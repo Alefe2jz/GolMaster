@@ -1,4 +1,5 @@
 import { useAuth } from "@/utils/auth/useAuth";
+import { api } from "@/services/api";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
@@ -12,8 +13,13 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
-      cacheTime: 1000 * 60 * 30, // 30 minutes
-      retry: 1,
+      gcTime: 1000 * 60 * 30, // 30 minutes
+      retry: (failureCount, error) => {
+        const status = error?.response?.status;
+        if (status && status >= 400 && status < 500) return false;
+        return failureCount < 2;
+      },
+      retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 3000),
       refetchOnWindowFocus: false,
     },
   },
@@ -25,6 +31,11 @@ export default function RootLayout() {
   useEffect(() => {
     initiate();
   }, [initiate]);
+
+  useEffect(() => {
+    // Warm backend to reduce cold-start delay on first matches request.
+    api.get("/health").catch(() => null);
+  }, []);
 
   useEffect(() => {
     if (isReady) {

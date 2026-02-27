@@ -16,6 +16,7 @@
 			"env": {
 				"EXPO_PUBLIC_API_URL": "https://golmaster-api.onrender.com/api",
 				"EXPO_PUBLIC_ALLOW_LOCAL_FALLBACK": "false",
+				"EXPO_PUBLIC_ENABLE_GOOGLE_LOGIN": "true",
 				"EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1008442753236-65f4jv0k7k3sut3aovibllmokn03a3qa.apps.googleusercontent.com",
 				"EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1008442753236-vsaa10ufppord716tt0rvb03rkb7f6c5.apps.googleusercontent.com"
 			}
@@ -25,6 +26,7 @@
 			"env": {
 				"EXPO_PUBLIC_API_URL": "https://golmaster-api.onrender.com/api",
 				"EXPO_PUBLIC_ALLOW_LOCAL_FALLBACK": "false",
+				"EXPO_PUBLIC_ENABLE_GOOGLE_LOGIN": "true",
 				"EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "1008442753236-65f4jv0k7k3sut3aovibllmokn03a3qa.apps.googleusercontent.com",
 				"EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "1008442753236-vsaa10ufppord716tt0rvb03rkb7f6c5.apps.googleusercontent.com"
 			}
