@@ -244,25 +244,27 @@ export default function Login() {
 
           {googleEnabled ? (
             <>
-              <GoogleSignInLauncher
-                enabled={startGoogleFlow}
-                androidClientId={googleAndroidClientId}
-                webClientId={googleWebClientId}
-                onError={(message) => setErrorMessage(message)}
-                onDone={() => {
-                  setGoogleLoading(false);
-                  setStartGoogleFlow(false);
-                }}
-                onSuccess={async (idToken) => {
-                  const result = await signInWithGoogle(idToken);
-                  if (!result.ok) {
-                    setErrorMessage(result.error || 'Falha no login com Google.');
-                    return;
-                  }
+              {startGoogleFlow ? (
+                <GoogleSignInLauncher
+                  enabled={startGoogleFlow}
+                  androidClientId={googleAndroidClientId}
+                  webClientId={googleWebClientId}
+                  onError={(message) => setErrorMessage(message)}
+                  onDone={() => {
+                    setGoogleLoading(false);
+                    setStartGoogleFlow(false);
+                  }}
+                  onSuccess={async (idToken) => {
+                    const result = await signInWithGoogle(idToken);
+                    if (!result.ok) {
+                      setErrorMessage(result.error || 'Falha no login com Google.');
+                      return;
+                    }
 
-                  router.replace('/(tabs)');
-                }}
-              />
+                    router.replace('/(tabs)');
+                  }}
+                />
+              ) : null}
 
               <View style={styles.dividerRow}>
                 <View style={styles.divider} />
