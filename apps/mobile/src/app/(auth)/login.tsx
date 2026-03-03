@@ -10,88 +10,17 @@ import {
 } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import * as Google from 'expo-auth-session/providers/google';
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import { useAuth } from '@/utils/auth/useAuth';
 
 type Mode = 'login' | 'register';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-type GoogleLauncherProps = {
-  enabled: boolean;
-  androidClientId?: string;
-  webClientId?: string;
-  onSuccess: (idToken: string) => Promise<void>;
-  onError: (message: string) => void;
-  onDone: () => void;
-};
-
-function GoogleSignInLauncher({
-  enabled,
-  androidClientId,
-  webClientId,
-  onSuccess,
-  onError,
-  onDone,
-}: GoogleLauncherProps) {
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    androidClientId,
-    webClientId,
-    scopes: ['profile', 'email'],
-    selectAccount: true,
-  });
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    const run = async () => {
-      if (!request) {
-        onError('Inicializacao do Google ainda nao concluida. Tente novamente.');
-        onDone();
-        return;
-      }
-
-      try {
-        await promptAsync({ showInRecents: true });
-      } catch {
-        onError('Falha ao abrir autenticacao do Google.');
-        onDone();
-      }
-    };
-
-    run();
-  }, [enabled, onDone, onError, promptAsync, request]);
-
-  useEffect(() => {
-    if (!enabled || !response) return;
-
-    const run = async () => {
-      if (response.type !== 'success') {
-        if (response.type !== 'dismiss') {
-          onError('Nao foi possivel completar o login com Google.');
-        }
-        onDone();
-        return;
-      }
-
-      const idToken =
-        response.params?.id_token || response.authentication?.idToken || null;
-
-      if (!idToken) {
-        onError('Google nao retornou token de autenticacao.');
-        onDone();
-        return;
-      }
-
-      await onSuccess(idToken);
-      onDone();
-    };
-
-    run();
-  }, [enabled, onDone, onError, onSuccess, response]);
-
-  return null;
-}
 
 // Architecture: authentication screen (email/password + Google OAuth entrypoint).
 export default function Login() {
@@ -102,16 +31,23 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [startGoogleFlow, setStartGoogleFlow] = useState(false);
 
   const googleEnabled = process.env.EXPO_PUBLIC_ENABLE_GOOGLE_LOGIN === 'true';
-  const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
   const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-  const canUseGoogle =
-    googleEnabled && !!googleAndroidClientId && !!googleWebClientId;
+  const canUseGoogle = googleEnabled && !!googleWebClientId;
 
   const title = useMemo(() => (mode === 'login' ? 'Entrar na conta' : 'Criar conta'), [mode]);
   const actionLabel = useMemo(() => (mode === 'login' ? 'Entrar' : 'Criar conta'), [mode]);
+
+  useEffect(() => {
+    if (!canUseGoogle) return;
+
+    GoogleSignin.configure({
+      webClientId: googleWebClientId,
+      scopes: ['profile', 'email'],
+      forceCodeForRefreshToken: false,
+    });
+  }, [canUseGoogle, googleWebClientId]);
 
   function validateForm() {
     const emailValue = email.trim().toLowerCase();
@@ -161,12 +97,56 @@ export default function Login() {
     setErrorMessage('');
 
     if (!canUseGoogle) {
-      setErrorMessage('Google login nao configurado para esta build.');
+      setErrorMessage('Google login nao configurado para esta build (web client id ausente).');
       return;
     }
 
-    setGoogleLoading(true);
-    setStartGoogleFlow(true);
+    try {
+      setGoogleLoading(true);
+
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const response = await GoogleSignin.signIn();
+
+      if (!isSuccessResponse(response)) {
+        setErrorMessage('Login com Google cancelado.');
+        return;
+      }
+
+      const idToken = response.data?.idToken;
+      if (!idToken) {
+        setErrorMessage('Google nao retornou token de autenticacao.');
+        return;
+      }
+
+      const result = await signInWithGoogle(idToken);
+      if (!result.ok) {
+        setErrorMessage(result.error || 'Falha no login com Google.');
+        return;
+      }
+
+      router.replace('/(tabs)');
+    } catch (error) {
+      if (isErrorWithCode(error)) {
+        if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+          setErrorMessage('Google Play Services nao disponivel no dispositivo.');
+          return;
+        }
+
+        if (error.code === statusCodes.IN_PROGRESS) {
+          setErrorMessage('Login com Google ja esta em andamento.');
+          return;
+        }
+
+        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+          setErrorMessage('Login com Google cancelado.');
+          return;
+        }
+      }
+
+      setErrorMessage('Falha ao autenticar com Google. Tente novamente.');
+    } finally {
+      setGoogleLoading(false);
+    }
   }
 
   return (
@@ -244,28 +224,6 @@ export default function Login() {
 
           {googleEnabled ? (
             <>
-              {startGoogleFlow ? (
-                <GoogleSignInLauncher
-                  enabled={startGoogleFlow}
-                  androidClientId={googleAndroidClientId}
-                  webClientId={googleWebClientId}
-                  onError={(message) => setErrorMessage(message)}
-                  onDone={() => {
-                    setGoogleLoading(false);
-                    setStartGoogleFlow(false);
-                  }}
-                  onSuccess={async (idToken) => {
-                    const result = await signInWithGoogle(idToken);
-                    if (!result.ok) {
-                      setErrorMessage(result.error || 'Falha no login com Google.');
-                      return;
-                    }
-
-                    router.replace('/(tabs)');
-                  }}
-                />
-              ) : null}
-
               <View style={styles.dividerRow}>
                 <View style={styles.divider} />
                 <Text style={styles.dividerText}>ou</Text>
@@ -286,7 +244,7 @@ export default function Login() {
               </Pressable>
               {!canUseGoogle ? (
                 <Text style={styles.warningText}>
-                  Configure EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID e EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.
+                  Configure EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID para usar Google Login.
                 </Text>
               ) : null}
             </>
