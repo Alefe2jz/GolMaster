@@ -17,6 +17,7 @@ import {
   Globe,
   Bell,
   LogOut,
+  Trash2,
   RefreshCw,
   ChevronRight,
 } from "lucide-react-native";
@@ -72,6 +73,23 @@ export default function SettingsScreen() {
     },
   });
 
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api.delete("/users/me");
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.clear();
+      signOut();
+      Alert.alert("Conta excluida", "Sua conta foi removida com sucesso.");
+    },
+    onError: (error) => {
+      const message =
+        error?.response?.data?.error || error?.message || "Falha ao excluir conta.";
+      Alert.alert("Erro", message);
+    },
+  });
+
   const settings = settingsData?.settings;
 
   const handleLanguageChange = () => {
@@ -115,6 +133,21 @@ export default function SettingsScreen() {
         onPress: signOut,
       },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Excluir conta",
+      "Essa acao e permanente e vai remover seus dados, palpites e amizades. Deseja continuar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir conta",
+          style: "destructive",
+          onPress: () => deleteAccountMutation.mutate(),
+        },
+      ],
+    );
   };
 
   const getLanguageText = (lang) => {
@@ -520,6 +553,40 @@ export default function SettingsScreen() {
               }}
             >
               Sair da conta
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleDeleteAccount}
+            disabled={deleteAccountMutation.isLoading}
+            style={{
+              marginTop: 12,
+              backgroundColor: "white",
+              borderRadius: 12,
+              padding: 16,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 1,
+              borderColor: "#FECACA",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 3,
+              opacity: deleteAccountMutation.isLoading ? 0.7 : 1,
+            }}
+          >
+            <Trash2 size={20} color="#B91C1C" />
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: "#B91C1C",
+                marginLeft: 8,
+              }}
+            >
+              {deleteAccountMutation.isLoading ? "Excluindo conta..." : "Excluir conta"}
             </Text>
           </TouchableOpacity>
         </View>

@@ -21,6 +21,7 @@ router.post("/auth/google", AuthController.googleLogin);
 
 // users
 router.get("/users", auth, UserController.index);
+router.delete("/users/me", auth, UserController.removeMe);
 
 // matches
 router.get("/matches", MatchesController.index);

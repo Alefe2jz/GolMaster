@@ -70,6 +70,21 @@ export default function FriendsScreen() {
     },
   });
 
+  const removeFriendMutation = useMutation({
+    mutationFn: async (friendshipId) => {
+      const response = await api.delete(`/friends/${friendshipId}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["friends"] });
+      Alert.alert("Sucesso", "Amizade desfeita.");
+    },
+    onError: (error) => {
+      const message = error?.response?.data?.error || error?.message || "Falha ao desfazer amizade.";
+      Alert.alert("Erro", message);
+    },
+  });
+
   const friends = friendsData?.friends || [];
   const myFriendCode = auth?.user?.friendCode || "";
 
@@ -106,6 +121,21 @@ export default function FriendsScreen() {
         onPress: () => respondFriendMutation.mutate({ friendshipId, action }),
       },
     ]);
+  };
+
+  const handleRemoveFriend = (friendshipId, friendName) => {
+    Alert.alert(
+      "Desfazer amizade",
+      `Deseja remover ${friendName || "este amigo"} da sua lista de amigos?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Desfazer",
+          style: "destructive",
+          onPress: () => removeFriendMutation.mutate(friendshipId),
+        },
+      ],
+    );
   };
 
   const renderFriend = (friend) => {
@@ -226,10 +256,36 @@ export default function FriendsScreen() {
             )}
           </View>
 
-          {isRequest && (
-            <View style={{ flexDirection: "row", gap: 8 }}>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {isRequest ? (
+              <>
+                <TouchableOpacity
+                  onPress={() => handleFriendAction(friend.friendship_id, "decline")}
+                  style={{
+                    backgroundColor: "#FEE2E2",
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 6,
+                  }}
+                >
+                  <X size={16} color="#DC2626" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => handleFriendAction(friend.friendship_id, "accept")}
+                  style={{
+                    backgroundColor: "#DCFCE7",
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Check size={16} color="#16A34A" />
+                </TouchableOpacity>
+              </>
+            ) : (
               <TouchableOpacity
-                onPress={() => handleFriendAction(friend.friendship_id, "decline")}
+                onPress={() => handleRemoveFriend(friend.friendship_id, friend.name)}
                 style={{
                   backgroundColor: "#FEE2E2",
                   paddingHorizontal: 12,
@@ -239,20 +295,8 @@ export default function FriendsScreen() {
               >
                 <X size={16} color="#DC2626" />
               </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => handleFriendAction(friend.friendship_id, "accept")}
-                style={{
-                  backgroundColor: "#DCFCE7",
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                }}
-              >
-                <Check size={16} color="#16A34A" />
-              </TouchableOpacity>
-            </View>
-          )}
+            )}
+          </View>
         </View>
       </View>
     );
