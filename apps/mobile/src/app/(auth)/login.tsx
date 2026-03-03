@@ -10,17 +10,20 @@ import {
 } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import {
-  GoogleSignin,
-  isErrorWithCode,
-  isSuccessResponse,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
 import { useAuth } from '@/utils/auth/useAuth';
 
 type Mode = 'login' | 'register';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Work around a package export issue that loads GoogleSigninButton in some builds.
+// We only need sign-in primitives, so we import the internal modules directly.
+const { GoogleSignin } = require('@react-native-google-signin/google-signin/lib/module/signIn/GoogleSignin.js');
+const { statusCodes } = require('@react-native-google-signin/google-signin/lib/module/errors/errorCodes.js');
+const {
+  isErrorWithCode,
+  isSuccessResponse,
+} = require('@react-native-google-signin/google-signin/lib/module/functions.js');
 
 // Architecture: authentication screen (email/password + Google OAuth entrypoint).
 export default function Login() {
@@ -126,18 +129,19 @@ export default function Login() {
 
       router.replace('/(tabs)');
     } catch (error) {
-      if (isErrorWithCode(error)) {
-        if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+      const nativeError = error as any;
+      if (isErrorWithCode(nativeError)) {
+        if (nativeError.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
           setErrorMessage('Google Play Services nao disponivel no dispositivo.');
           return;
         }
 
-        if (error.code === statusCodes.IN_PROGRESS) {
+        if (nativeError.code === statusCodes.IN_PROGRESS) {
           setErrorMessage('Login com Google ja esta em andamento.');
           return;
         }
 
-        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        if (nativeError.code === statusCodes.SIGN_IN_CANCELLED) {
           setErrorMessage('Login com Google cancelado.');
           return;
         }
