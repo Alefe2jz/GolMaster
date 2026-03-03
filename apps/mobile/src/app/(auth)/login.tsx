@@ -130,6 +130,7 @@ export default function Login() {
       router.replace('/(tabs)');
     } catch (error) {
       const nativeError = error as any;
+      console.error('Google native sign-in error:', nativeError);
       if (isErrorWithCode(nativeError)) {
         if (nativeError.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
           setErrorMessage('Google Play Services nao disponivel no dispositivo.');
@@ -143,6 +144,13 @@ export default function Login() {
 
         if (nativeError.code === statusCodes.SIGN_IN_CANCELLED) {
           setErrorMessage('Login com Google cancelado.');
+          return;
+        }
+
+        const code = nativeError.code ? String(nativeError.code) : '';
+        const message = nativeError.message ? String(nativeError.message) : '';
+        if (code || message) {
+          setErrorMessage(`Erro Google (${code || "desconhecido"}). ${message || "Tente novamente."}`);
           return;
         }
       }

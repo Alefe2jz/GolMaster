@@ -12,7 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/utils/auth/useAuth";
-import { Users, UserPlus, Hash, X, Check, Clock } from "lucide-react-native";
+import { Users, UserPlus, Hash, X, Check, Clock, UserMinus } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
 import KeyboardAvoidingAnimatedView from "@/components/KeyboardAvoidingAnimatedView";
 import { api } from "@/services/api";
@@ -283,21 +283,33 @@ export default function FriendsScreen() {
                   <Check size={16} color="#16A34A" />
                 </TouchableOpacity>
               </>
-            ) : (
-              <TouchableOpacity
-                onPress={() => handleRemoveFriend(friend.friendship_id, friend.name)}
-                style={{
-                  backgroundColor: "#FEE2E2",
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                }}
-              >
-                <X size={16} color="#DC2626" />
-              </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         </View>
+
+        {!isRequest ? (
+          <TouchableOpacity
+            onPress={() => handleRemoveFriend(friend.friendship_id, friend.name)}
+            style={{
+              marginTop: 12,
+              borderWidth: 1,
+              borderColor: "#FECACA",
+              backgroundColor: "#FEF2F2",
+              borderRadius: 8,
+              paddingVertical: 9,
+              paddingHorizontal: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <UserMinus size={16} color="#B91C1C" />
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#B91C1C" }}>
+              Desfazer amizade
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   };
