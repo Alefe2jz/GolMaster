@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  TextInput,
   Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -19,6 +20,7 @@ export default function HomeScreen() {
   const { isAuthenticated, auth } = useAuth();
   const queryClient = useQueryClient();
   const [selectedStage, setSelectedStage] = useState("all");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Fetch matches
   const {
@@ -48,6 +50,21 @@ export default function HomeScreen() {
   });
 
   const matches = matchesData?.matches || [];
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredMatches = matches.filter((match) => {
+    if (!normalizedSearch) return true;
+    const haystack = [
+      match.home_team_name,
+      match.away_team_name,
+      match.stadium_name,
+      match.stadium_city,
+      match.stage_label,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(normalizedSearch);
+  });
   const predictions = predictionsData?.predictions || [];
   const predictionMap = predictions.reduce((acc, pred) => {
     acc[pred.match_id] = pred;
@@ -372,6 +389,24 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        <TextInput
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+          placeholder="Pesquisar jogo, time, estadio..."
+          placeholderTextColor="#94A3B8"
+          style={{
+            marginTop: 12,
+            borderWidth: 1,
+            borderColor: "#D1D5DB",
+            borderRadius: 10,
+            backgroundColor: "#F9FAFB",
+            color: "#111827",
+            fontSize: 14,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+          }}
+        />
       </View>
 
       {/* Matches List */}
@@ -426,15 +461,15 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {matches.length === 0 && !isLoading && !error ? (
+        {filteredMatches.length === 0 && !isLoading && !error ? (
           <View style={{ alignItems: "center", marginTop: 40 }}>
             <Text style={{ fontSize: 48, marginBottom: 16 }}>⚽</Text>
             <Text style={{ fontSize: 16, color: "#6B7280" }}>
-              Nenhum jogo encontrado
+              {searchTerm.trim() ? "Nenhum jogo para essa pesquisa" : "Nenhum jogo encontrado"}
             </Text>
           </View>
         ) : (
-          matches.map(renderMatch)
+          filteredMatches.map(renderMatch)
         )}
       </ScrollView>
     </View>

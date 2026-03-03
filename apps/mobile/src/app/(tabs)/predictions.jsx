@@ -34,6 +34,7 @@ export default function PredictionsScreen() {
   const [homeScore, setHomeScore] = useState("");
   const [awayScore, setAwayScore] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const {
     data: matchesData,
@@ -100,6 +101,21 @@ export default function PredictionsScreen() {
 
   const matches = matchesData?.matches || [];
   const predictions = predictionsData?.predictions || [];
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredMatches = matches.filter((match) => {
+    if (!normalizedSearch) return true;
+    const haystack = [
+      match.home_team_name,
+      match.away_team_name,
+      match.stadium_name,
+      match.stadium_city,
+      match.stage_label,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(normalizedSearch);
+  });
 
   const predictionMap = useMemo(
     () =>
@@ -249,6 +265,23 @@ export default function PredictionsScreen() {
         <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>
           Escolha um jogo e registre seu palpite
         </Text>
+        <TextInput
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+          placeholder="Pesquisar jogo, time, estadio..."
+          placeholderTextColor="#94A3B8"
+          style={{
+            marginTop: 12,
+            borderWidth: 1,
+            borderColor: "#D1D5DB",
+            borderRadius: 10,
+            backgroundColor: "#F9FAFB",
+            color: "#111827",
+            fontSize: 14,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+          }}
+        />
       </View>
 
       <ScrollView
@@ -280,12 +313,14 @@ export default function PredictionsScreen() {
               <Text style={{ color: "#DC2626", fontWeight: "600" }}>Tentar novamente</Text>
             </TouchableOpacity>
           </View>
-        ) : matches.length === 0 ? (
+        ) : filteredMatches.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 40 }}>
-            <Text style={{ fontSize: 16, color: "#6B7280" }}>Nenhum jogo disponivel</Text>
+            <Text style={{ fontSize: 16, color: "#6B7280" }}>
+              {searchTerm.trim() ? "Nenhum jogo para essa pesquisa" : "Nenhum jogo disponivel"}
+            </Text>
           </View>
         ) : (
-          matches.map((match) => (
+          filteredMatches.map((match) => (
             <TouchableOpacity
               key={match.id}
               onPress={() => handleMakePrediction(match)}
