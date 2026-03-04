@@ -8,18 +8,12 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: "teste@golmaster.com" },
-    update: {
-      name: "Teste",
-      passwordHash,
-      friendCode: "GM-TEST-0001",
-      role: "ADMIN",
-    },
+    update: { name: "Teste", passwordHash, friendCode: "GM-TEST-0001" },
     create: {
       name: "Teste",
       email: "teste@golmaster.com",
       passwordHash,
       friendCode: "GM-TEST-0001",
-      role: "ADMIN",
     },
   });
 

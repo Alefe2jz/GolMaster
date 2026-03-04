@@ -7,17 +7,10 @@ import { generateUniqueFriendCode } from "../utils/friendCode";
 
 const JWT_SECRET = process.env.JWT_SECRET || "golmaster-secret";
 const googleClient = new OAuth2Client();
-const ADMIN_SETTINGS_ID = "global";
 
 export class AuthController {
   static async register(req: Request, res: Response) {
     const { name, email, password } = req.body;
-    const adminSettings = await prisma.adminSetting.findUnique({
-      where: { id: ADMIN_SETTINGS_ID },
-    });
-    if (adminSettings && !adminSettings.allowRegistrations) {
-      return res.status(403).json({ error: "Registrations are disabled" });
-    }
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: "Missing fields" });
@@ -65,9 +58,6 @@ export class AuthController {
     if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
-    if (user.isBlocked) {
-      return res.status(403).json({ error: "User is blocked" });
-    }
 
     if (!user.passwordHash) {
       return res.status(401).json({ error: "Use Google login" });
@@ -98,13 +88,6 @@ export class AuthController {
 
   static async googleLogin(req: Request, res: Response) {
     try {
-      const adminSettings = await prisma.adminSetting.findUnique({
-        where: { id: ADMIN_SETTINGS_ID },
-      });
-      if (adminSettings && !adminSettings.allowGoogleAuth) {
-        return res.status(403).json({ error: "Google auth is disabled" });
-      }
-
       const { id_token } = req.body || {};
       if (!id_token) {
         return res.status(400).json({ error: "Missing id_token" });
@@ -147,9 +130,6 @@ export class AuthController {
             where: { id: user.id },
             data: { friendCode: await generateUniqueFriendCode() },
           });
-      if (userWithFriendCode.isBlocked) {
-        return res.status(403).json({ error: "User is blocked" });
-      }
 
       const token = jwt.sign({ sub: userWithFriendCode.id }, JWT_SECRET, {
         expiresIn: "7d",
