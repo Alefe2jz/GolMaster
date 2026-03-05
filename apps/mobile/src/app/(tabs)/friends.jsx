@@ -12,10 +12,19 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/utils/auth/useAuth";
-import { Users, UserPlus, Hash, X, Check, Clock, UserMinus } from "lucide-react-native";
+import { Users, UserPlus, Hash, X, Check, Clock, UserMinus, Eye, Target } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
 import KeyboardAvoidingAnimatedView from "@/components/KeyboardAvoidingAnimatedView";
 import { api } from "@/services/api";
+
+const toDateLabel = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+};
 
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
@@ -24,6 +33,9 @@ export default function FriendsScreen() {
   const [friendCode, setFriendCode] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTab, setSelectedTab] = useState("friends");
+  const [friendPredictionsModalVisible, setFriendPredictionsModalVisible] = useState(false);
+  const [selectedFriend, setSelectedFriend] = useState(null);
+  const [friendPredictionSearch, setFriendPredictionSearch] = useState("");
 
   const { data: friendsData } = useQuery({
     queryKey: ["friends", selectedTab],
@@ -34,6 +46,23 @@ export default function FriendsScreen() {
       return response.data;
     },
     enabled: isAuthenticated,
+  });
+
+  const {
+    data: friendPredictionsData,
+    isLoading: friendPredictionsLoading,
+    error: friendPredictionsError,
+    refetch: refetchFriendPredictions,
+  } = useQuery({
+    queryKey: ["friend-predictions", selectedFriend?.friendship_id],
+    queryFn: async () => {
+      if (!selectedFriend?.friendship_id) {
+        return { predictions: [], friend: null };
+      }
+      const response = await api.get(`/friends/${selectedFriend.friendship_id}/predictions`);
+      return response.data;
+    },
+    enabled: isAuthenticated && !!selectedFriend?.friendship_id && friendPredictionsModalVisible,
   });
 
   const addFriendMutation = useMutation({
@@ -137,6 +166,36 @@ export default function FriendsScreen() {
       ],
     );
   };
+
+  const openFriendPredictions = (friend) => {
+    setSelectedFriend(friend);
+    setFriendPredictionSearch("");
+    setFriendPredictionsModalVisible(true);
+  };
+
+  const closeFriendPredictions = () => {
+    setFriendPredictionsModalVisible(false);
+    setSelectedFriend(null);
+    setFriendPredictionSearch("");
+  };
+
+  const friendPredictions = friendPredictionsData?.predictions || [];
+  const normalizedFriendSearch = friendPredictionSearch.trim().toLowerCase();
+  const filteredFriendPredictions = friendPredictions.filter((prediction) => {
+    if (!normalizedFriendSearch) return true;
+    const match = prediction.match || {};
+    const haystack = [
+      match.home_team_name,
+      match.away_team_name,
+      match.stage,
+      match.stadium_name,
+      match.stadium_city,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(normalizedFriendSearch);
+  });
 
   const renderFriend = (friend) => {
     const isRequest = selectedTab === "requests";
@@ -288,27 +347,50 @@ export default function FriendsScreen() {
         </View>
 
         {!isRequest ? (
-          <TouchableOpacity
-            onPress={() => handleRemoveFriend(friend.friendship_id, friend.name)}
-            style={{
-              marginTop: 12,
-              borderWidth: 1,
-              borderColor: "#FECACA",
-              backgroundColor: "#FEF2F2",
-              borderRadius: 8,
-              paddingVertical: 9,
-              paddingHorizontal: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            }}
-          >
-            <UserMinus size={16} color="#B91C1C" />
-            <Text style={{ fontSize: 13, fontWeight: "700", color: "#B91C1C" }}>
-              Desfazer amizade
-            </Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              onPress={() => openFriendPredictions(friend)}
+              style={{
+                marginTop: 12,
+                borderWidth: 1,
+                borderColor: "#BFDBFE",
+                backgroundColor: "#EFF6FF",
+                borderRadius: 8,
+                paddingVertical: 9,
+                paddingHorizontal: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <Eye size={16} color="#1D4ED8" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1D4ED8" }}>
+                Ver palpites
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleRemoveFriend(friend.friendship_id, friend.name)}
+              style={{
+                marginTop: 8,
+                borderWidth: 1,
+                borderColor: "#FECACA",
+                backgroundColor: "#FEF2F2",
+                borderRadius: 8,
+                paddingVertical: 9,
+                paddingHorizontal: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <UserMinus size={16} color="#B91C1C" />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#B91C1C" }}>
+                Desfazer amizade
+              </Text>
+            </TouchableOpacity>
+          </>
         ) : null}
       </View>
     );
@@ -557,6 +639,190 @@ export default function FriendsScreen() {
           friends.map(renderFriend)
         )}
       </ScrollView>
+
+      <Modal
+        visible={friendPredictionsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeFriendPredictions}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "white",
+              borderRadius: 16,
+              padding: 16,
+              width: "94%",
+              maxWidth: 500,
+              maxHeight: "86%",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>
+                  Palpites do amigo
+                </Text>
+                <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                  {friendPredictionsData?.friend?.name || selectedFriend?.name || "Amigo"}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={closeFriendPredictions}>
+                <X size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              value={friendPredictionSearch}
+              onChangeText={setFriendPredictionSearch}
+              placeholder="Pesquisar time, jogo ou estadio..."
+              placeholderTextColor="#94A3B8"
+              style={{
+                marginTop: 12,
+                borderWidth: 1,
+                borderColor: "#D1D5DB",
+                borderRadius: 10,
+                backgroundColor: "#F8FAFC",
+                color: "#111827",
+                fontSize: 14,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+              }}
+            />
+
+            <View
+              style={{
+                marginTop: 10,
+                backgroundColor: "#EEF2FF",
+                borderRadius: 10,
+                padding: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Target size={16} color="#3730A3" />
+                <Text style={{ color: "#3730A3", fontSize: 13, fontWeight: "600" }}>
+                  Total de palpites
+                </Text>
+              </View>
+              <Text style={{ color: "#312E81", fontSize: 14, fontWeight: "800" }}>
+                {friendPredictionsData?.total ?? 0}
+              </Text>
+            </View>
+
+            <ScrollView style={{ marginTop: 12 }} contentContainerStyle={{ paddingBottom: 6 }}>
+              {friendPredictionsLoading ? (
+                <View style={{ paddingVertical: 30, alignItems: "center" }}>
+                  <Text style={{ color: "#6B7280" }}>Carregando palpites...</Text>
+                </View>
+              ) : friendPredictionsError ? (
+                <View
+                  style={{
+                    padding: 12,
+                    backgroundColor: "#FEE2E2",
+                    borderRadius: 10,
+                    borderLeftWidth: 4,
+                    borderLeftColor: "#DC2626",
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: "#991B1B" }}>
+                    Erro ao carregar os palpites do amigo.
+                  </Text>
+                  <TouchableOpacity onPress={refetchFriendPredictions} style={{ marginTop: 8 }}>
+                    <Text style={{ color: "#B91C1C", fontWeight: "700" }}>Tentar novamente</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : filteredFriendPredictions.length === 0 ? (
+                <View style={{ paddingVertical: 28, alignItems: "center" }}>
+                  <Text style={{ color: "#6B7280" }}>
+                    {friendPredictionSearch.trim()
+                      ? "Nenhum palpite para essa pesquisa"
+                      : "Esse amigo ainda nao registrou palpites"}
+                  </Text>
+                </View>
+              ) : (
+                filteredFriendPredictions.map((prediction) => {
+                  const match = prediction.match || {};
+                  const status = match.status || "scheduled";
+                  const hitLabel =
+                    prediction.is_correct === true
+                      ? { text: "Acertou", bg: "#DCFCE7", color: "#166534" }
+                      : prediction.is_correct === false
+                        ? { text: "Errou", bg: "#FEE2E2", color: "#B91C1C" }
+                        : { text: "Em aberto", bg: "#E2E8F0", color: "#334155" };
+
+                  return (
+                    <View
+                      key={prediction.id}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: "#E5E7EB",
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: 12,
+                        padding: 12,
+                        marginBottom: 10,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                        <Text
+                          style={{ fontSize: 13, fontWeight: "700", color: "#0F172A", flex: 1, paddingRight: 8 }}
+                        >
+                          {match.home_team_name} vs {match.away_team_name}
+                        </Text>
+                        <View
+                          style={{
+                            backgroundColor: hitLabel.bg,
+                            borderRadius: 999,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, color: hitLabel.color, fontWeight: "700" }}>
+                            {hitLabel.text}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={{ marginTop: 6, fontSize: 12, color: "#64748B" }}>
+                        {toDateLabel(match.match_date)}
+                      </Text>
+
+                      <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <Text style={{ fontSize: 12, color: "#334155" }}>
+                          Palpite: {prediction.predicted_home_score} - {prediction.predicted_away_score}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: "#64748B", textTransform: "capitalize" }}>
+                          {status}
+                        </Text>
+                      </View>
+
+                      {status === "finished" ? (
+                        <Text style={{ marginTop: 4, fontSize: 12, color: "#0F172A", fontWeight: "600" }}>
+                          Resultado: {match.home_score} - {match.away_score}
+                        </Text>
+                      ) : null}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={modalVisible}

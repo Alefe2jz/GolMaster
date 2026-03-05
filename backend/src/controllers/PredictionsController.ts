@@ -47,9 +47,10 @@ export class PredictionsController {
         return res.status(404).json({ error: "Match not found" });
       }
 
-      if (match.status === "finished" || match.status === "live") {
+      const hasStarted = new Date(match.matchDate).getTime() <= Date.now();
+      if (match.status === "finished" || match.status === "live" || hasStarted) {
         return res.status(400).json({
-          error: "Cannot predict on finished or live matches",
+          error: "Cannot change prediction after match start",
         });
       }
 
@@ -93,10 +94,22 @@ export class PredictionsController {
         where: {
           userId_matchId: { userId, matchId },
         },
+        include: { match: true },
       });
 
       if (!existing) {
         return res.status(404).json({ error: "Prediction not found" });
+      }
+
+      const hasStarted = new Date(existing.match.matchDate).getTime() <= Date.now();
+      if (
+        existing.match.status === "finished" ||
+        existing.match.status === "live" ||
+        hasStarted
+      ) {
+        return res.status(400).json({
+          error: "Cannot change prediction after match start",
+        });
       }
 
       await prisma.prediction.delete({

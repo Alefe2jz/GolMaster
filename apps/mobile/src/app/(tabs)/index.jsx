@@ -70,6 +70,12 @@ export default function HomeScreen() {
     acc[pred.match_id] = pred;
     return acc;
   }, {});
+  const toGroupLetter = (stage) => {
+    if (!stage || typeof stage !== "string") return null;
+    const match = stage.match(/^group_([a-z])$/i);
+    if (!match) return null;
+    return match[1].toUpperCase();
+  };
 
   const stages = [
     { key: "all", label: "Todos" },
@@ -116,6 +122,112 @@ export default function HomeScreen() {
     const normalized = String(name).trim().toLowerCase();
     return normalized === "sem agenda marcada" || normalized === "tbd";
   };
+
+  const buildGroupData = (sourceMatches) => {
+    const groupsMap = new Map();
+
+    sourceMatches.forEach((match) => {
+      const letter = toGroupLetter(match.stage);
+      if (!letter) return;
+
+      const groupKey = `group_${letter}`;
+      if (!groupsMap.has(groupKey)) {
+        groupsMap.set(groupKey, {
+          key: groupKey,
+          letter,
+          label: `Grupo ${letter}`,
+          matches: [],
+          teamsMap: new Map(),
+        });
+      }
+
+      const group = groupsMap.get(groupKey);
+      group.matches.push(match);
+
+      const ensureTeam = (name, flag) => {
+        if (!name || isNoScheduleTeam(name)) return null;
+        if (!group.teamsMap.has(name)) {
+          group.teamsMap.set(name, {
+            name,
+            flag: flag || "🏳️",
+            played: 0,
+            wins: 0,
+            draws: 0,
+            losses: 0,
+            goalsFor: 0,
+            goalsAgainst: 0,
+            goalDiff: 0,
+            points: 0,
+          });
+        }
+        return group.teamsMap.get(name);
+      };
+
+      const home = ensureTeam(match.home_team_name, match.home_team_flag);
+      const away = ensureTeam(match.away_team_name, match.away_team_flag);
+      const hasScore =
+        match.status === "finished" &&
+        typeof match.home_score === "number" &&
+        typeof match.away_score === "number" &&
+        home &&
+        away;
+
+      if (!hasScore) return;
+
+      home.played += 1;
+      away.played += 1;
+
+      home.goalsFor += match.home_score;
+      home.goalsAgainst += match.away_score;
+      away.goalsFor += match.away_score;
+      away.goalsAgainst += match.home_score;
+
+      home.goalDiff = home.goalsFor - home.goalsAgainst;
+      away.goalDiff = away.goalsFor - away.goalsAgainst;
+
+      if (match.home_score > match.away_score) {
+        home.wins += 1;
+        home.points += 3;
+        away.losses += 1;
+      } else if (match.home_score < match.away_score) {
+        away.wins += 1;
+        away.points += 3;
+        home.losses += 1;
+      } else {
+        home.draws += 1;
+        away.draws += 1;
+        home.points += 1;
+        away.points += 1;
+      }
+    });
+
+    return Array.from(groupsMap.values())
+      .map((group) => {
+        const standings = Array.from(group.teamsMap.values())
+          .sort((a, b) => {
+            if (b.points !== a.points) return b.points - a.points;
+            if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+            if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+            return a.name.localeCompare(b.name);
+          })
+          .map((team, index) => ({
+            ...team,
+            position: index + 1,
+          }));
+
+        return {
+          key: group.key,
+          letter: group.letter,
+          label: group.label,
+          matches: group.matches,
+          standings,
+        };
+      })
+      .sort((a, b) => a.letter.localeCompare(b.letter));
+  };
+
+  const groupDataForStandings = buildGroupData(matches);
+  const groupDataForDisplay = buildGroupData(filteredMatches);
 
   const renderMatch = (match) => {
     const { date, time } = formatDate(match.match_date);
@@ -311,6 +423,82 @@ export default function HomeScreen() {
     );
   };
 
+  const renderGroupStandings = (group) => {
+    if (!group.standings.length) return null;
+
+    return (
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginBottom: 10,
+          backgroundColor: "#FFFFFF",
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#E5E7EB",
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            backgroundColor: "#F8FAFC",
+            borderBottomWidth: 1,
+            borderBottomColor: "#E5E7EB",
+            paddingVertical: 8,
+            paddingHorizontal: 10,
+          }}
+        >
+          <Text style={{ width: 24, fontSize: 11, color: "#64748B", fontWeight: "700" }}>#</Text>
+          <Text style={{ flex: 1, fontSize: 11, color: "#64748B", fontWeight: "700" }}>Time</Text>
+          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>P</Text>
+          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>J</Text>
+          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>V</Text>
+          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>E</Text>
+          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>D</Text>
+          <Text style={{ width: 26, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>SG</Text>
+        </View>
+
+        {group.standings.map((team) => (
+          <View
+            key={`${group.key}-${team.name}`}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingVertical: 8,
+              paddingHorizontal: 10,
+              borderBottomWidth: 1,
+              borderBottomColor: "#F1F5F9",
+              backgroundColor: team.position <= 2 ? "#F0FDF4" : "#FFFFFF",
+            }}
+          >
+            <Text style={{ width: 24, fontSize: 12, color: "#334155", fontWeight: "700" }}>
+              {team.position}
+            </Text>
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+              <Text style={{ fontSize: 16, marginRight: 6 }}>{team.flag || "🏳️"}</Text>
+              <Text
+                numberOfLines={1}
+                style={{ fontSize: 12, color: "#0F172A", fontWeight: "600", maxWidth: 140 }}
+              >
+                {team.name}
+              </Text>
+            </View>
+            <Text style={{ width: 22, textAlign: "center", fontSize: 12, color: "#166534", fontWeight: "800" }}>
+              {team.points}
+            </Text>
+            <Text style={{ width: 22, textAlign: "center", fontSize: 12, color: "#334155" }}>{team.played}</Text>
+            <Text style={{ width: 22, textAlign: "center", fontSize: 12, color: "#334155" }}>{team.wins}</Text>
+            <Text style={{ width: 22, textAlign: "center", fontSize: 12, color: "#334155" }}>{team.draws}</Text>
+            <Text style={{ width: 22, textAlign: "center", fontSize: 12, color: "#334155" }}>{team.losses}</Text>
+            <Text style={{ width: 26, textAlign: "center", fontSize: 12, color: "#334155", fontWeight: "700" }}>
+              {team.goalDiff > 0 ? `+${team.goalDiff}` : team.goalDiff}
+            </Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
       <StatusBar style="dark" />
@@ -468,6 +656,34 @@ export default function HomeScreen() {
               {searchTerm.trim() ? "Nenhum jogo para essa pesquisa" : "Nenhum jogo encontrado"}
             </Text>
           </View>
+        ) : selectedStage === "group_stage" ? (
+          groupDataForDisplay.map((group) => (
+            <View key={group.key}>
+              <View
+                style={{
+                  marginHorizontal: 16,
+                  marginBottom: 8,
+                  marginTop: 2,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
+                  {group.label}
+                </Text>
+                <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
+                  {group.matches.length} jogos
+                </Text>
+              </View>
+
+              {renderGroupStandings(
+                groupDataForStandings.find((item) => item.key === group.key) || group
+              )}
+
+              {group.matches.map(renderMatch)}
+            </View>
+          ))
         ) : (
           filteredMatches.map(renderMatch)
         )}
@@ -475,3 +691,4 @@ export default function HomeScreen() {
     </View>
   );
 }
+

@@ -35,6 +35,7 @@ router.delete("/predictions/:matchId", auth, PredictionsController.remove);
 
 // friends
 router.get("/friends", auth, FriendsController.index);
+router.get("/friends/:id/predictions", auth, FriendsController.predictions);
 router.post("/friends", auth, FriendsController.create);
 router.put("/friends/:id", auth, FriendsController.respond);
 router.delete("/friends/:id", auth, FriendsController.remove);

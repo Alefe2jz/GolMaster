@@ -192,4 +192,76 @@ export class FriendsController {
       return res.status(500).json({ error: "Failed to remove friendship" });
     }
   }
+
+  static async predictions(req: Request, res: Response) {
+    try {
+      const userId = req.userId;
+      const id = toParamString(req.params.id);
+      if (!id) {
+        return res.status(400).json({ error: "Missing friendship id" });
+      }
+
+      const friendship = await prisma.friend.findUnique({
+        where: { id },
+        include: { user: true, friend: true },
+      });
+
+      if (!friendship) {
+        return res.status(404).json({ error: "Friendship not found" });
+      }
+
+      if (friendship.friendId !== userId && friendship.userId !== userId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      if (friendship.status !== "accepted") {
+        return res.status(400).json({ error: "Friendship is not accepted" });
+      }
+
+      const friendUser = friendship.userId === userId ? friendship.friend : friendship.user;
+
+      const predictions = await prisma.prediction.findMany({
+        where: { userId: friendUser.id },
+        include: { match: true },
+        orderBy: { createdAt: "desc" },
+      });
+
+      const payload = predictions.map((prediction) => ({
+        id: prediction.id,
+        match_id: prediction.matchId,
+        predicted_home_score: prediction.predictedHomeScore,
+        predicted_away_score: prediction.predictedAwayScore,
+        is_correct: prediction.isCorrect,
+        created_at: prediction.createdAt,
+        match: {
+          id: prediction.match.id,
+          home_team_name: prediction.match.homeTeamName,
+          away_team_name: prediction.match.awayTeamName,
+          home_team_flag: prediction.match.homeTeamFlag || "",
+          away_team_flag: prediction.match.awayTeamFlag || "",
+          match_date: prediction.match.matchDate,
+          stadium_name: prediction.match.stadiumName,
+          stadium_city: prediction.match.stadiumCity,
+          status: prediction.match.status,
+          stage: prediction.match.stage,
+          home_score: prediction.match.homeScore,
+          away_score: prediction.match.awayScore,
+        },
+      }));
+
+      return res.json({
+        friend: {
+          id: friendUser.id,
+          name: friendUser.name,
+          email: friendUser.email,
+          friend_id: friendUser.friendCode,
+        },
+        predictions: payload,
+        total: payload.length,
+      });
+    } catch (error) {
+      console.error("GET /api/friends/:id/predictions error:", error);
+      return res.status(500).json({ error: "Failed to fetch friend predictions" });
+    }
+  }
 }

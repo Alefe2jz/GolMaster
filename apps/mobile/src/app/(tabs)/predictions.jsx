@@ -25,6 +25,12 @@ const toDateLabel = (value) => {
   })}`;
 };
 
+const isMatchLocked = (match) => {
+  if (!match?.match_date) return true;
+  const started = new Date(match.match_date).getTime() <= Date.now();
+  return started || match.status === "live" || match.status === "finished";
+};
+
 export default function PredictionsScreen() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, signIn } = useAuth();
@@ -127,6 +133,7 @@ export default function PredictionsScreen() {
   );
 
   const selectedPrediction = selectedMatch ? predictionMap[selectedMatch.id] : null;
+  const selectedMatchLocked = selectedMatch ? isMatchLocked(selectedMatch) : false;
 
   const closeModal = () => {
     setModalVisible(false);
@@ -141,6 +148,11 @@ export default function PredictionsScreen() {
         { text: "Cancelar", style: "cancel" },
         { text: "Fazer login", onPress: signIn },
       ]);
+      return;
+    }
+
+    if (isMatchLocked(match)) {
+      Alert.alert("Palpite bloqueado", "Nao e possivel alterar palpites apos o inicio do jogo.");
       return;
     }
 
@@ -160,6 +172,10 @@ export default function PredictionsScreen() {
 
   const handleSavePrediction = () => {
     if (!selectedMatch) return;
+    if (isMatchLocked(selectedMatch)) {
+      Alert.alert("Palpite bloqueado", "Nao e possivel alterar palpites apos o inicio do jogo.");
+      return;
+    }
 
     const home = Number(homeScore);
     const away = Number(awayScore);
@@ -178,6 +194,11 @@ export default function PredictionsScreen() {
 
   const handleRemovePrediction = () => {
     if (!selectedMatch) return;
+
+    if (isMatchLocked(selectedMatch)) {
+      Alert.alert("Palpite bloqueado", "Nao e possivel alterar palpites apos o inicio do jogo.");
+      return;
+    }
 
     Alert.alert("Cancelar palpite", "Deseja remover este palpite?", [
       { text: "Voltar", style: "cancel" },
@@ -324,6 +345,7 @@ export default function PredictionsScreen() {
             <TouchableOpacity
               key={match.id}
               onPress={() => handleMakePrediction(match)}
+              disabled={isMatchLocked(match)}
               style={{
                 backgroundColor: "white",
                 marginHorizontal: 16,
@@ -335,6 +357,7 @@ export default function PredictionsScreen() {
                 shadowOpacity: 0.1,
                 shadowRadius: 4,
                 elevation: 3,
+                opacity: isMatchLocked(match) ? 0.75 : 1,
               }}
             >
               <View
@@ -380,6 +403,23 @@ export default function PredictionsScreen() {
                   <Text style={{ color: "#92400E", fontSize: 13 }}>Toque para palpitar</Text>
                 </View>
               )}
+
+              {isMatchLocked(match) ? (
+                <View
+                  style={{
+                    marginTop: 8,
+                    alignSelf: "flex-start",
+                    backgroundColor: "#E2E8F0",
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Text style={{ color: "#334155", fontSize: 11, fontWeight: "700" }}>
+                    Palpite bloqueado
+                  </Text>
+                </View>
+              ) : null}
             </TouchableOpacity>
           ))
         )}
@@ -497,7 +537,7 @@ export default function PredictionsScreen() {
                 {selectedPrediction ? (
                   <TouchableOpacity
                     onPress={handleRemovePrediction}
-                    disabled={removePredictionMutation.isPending}
+                    disabled={removePredictionMutation.isPending || selectedMatchLocked}
                     style={{
                       marginTop: 14,
                       borderWidth: 1,
@@ -506,7 +546,7 @@ export default function PredictionsScreen() {
                       paddingVertical: 10,
                       alignItems: "center",
                       backgroundColor: "#FEF2F2",
-                      opacity: removePredictionMutation.isPending ? 0.7 : 1,
+                      opacity: removePredictionMutation.isPending || selectedMatchLocked ? 0.7 : 1,
                     }}
                   >
                     <Text style={{ color: "#B91C1C", fontWeight: "700" }}>
@@ -531,14 +571,14 @@ export default function PredictionsScreen() {
 
                   <TouchableOpacity
                     onPress={handleSavePrediction}
-                    disabled={predictionMutation.isPending}
+                    disabled={predictionMutation.isPending || selectedMatchLocked}
                     style={{
                       flex: 1,
                       borderRadius: 10,
                       paddingVertical: 11,
                       alignItems: "center",
                       backgroundColor: "#16A34A",
-                      opacity: predictionMutation.isPending ? 0.7 : 1,
+                      opacity: predictionMutation.isPending || selectedMatchLocked ? 0.7 : 1,
                     }}
                   >
                     {predictionMutation.isPending ? (
@@ -548,6 +588,11 @@ export default function PredictionsScreen() {
                     )}
                   </TouchableOpacity>
                 </View>
+                {selectedMatchLocked ? (
+                  <Text style={{ marginTop: 10, fontSize: 12, color: "#B45309", textAlign: "center" }}>
+                    Este jogo ja iniciou. Alteracoes de palpite estao bloqueadas.
+                  </Text>
+                ) : null}
               </>
             ) : null}
           </View>
