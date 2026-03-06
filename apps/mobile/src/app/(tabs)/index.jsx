@@ -6,39 +6,36 @@ import {
   TouchableOpacity,
   RefreshControl,
   TextInput,
-  Alert,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/utils/auth/useAuth";
 import { Calendar, MapPin, Tv } from "lucide-react-native";
 import { api } from "@/services/api";
+import { toLocale, useI18n } from "@/i18n/useI18n";
+
+const EMPTY_FLAG = "🏳️";
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, auth } = useAuth();
-  const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
+  const { language, t } = useI18n();
   const [selectedStage, setSelectedStage] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Fetch matches
-  const {
-    data: matchesData,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["matches", selectedStage],
+  const { data: matchesData, isLoading, error, refetch } = useQuery({
+    queryKey: ["matches", selectedStage, language],
     queryFn: async () => {
       const params =
-        selectedStage === "all" ? {} : { stage: selectedStage };
+        selectedStage === "all"
+          ? { lang: language }
+          : { stage: selectedStage, lang: language };
       const response = await api.get("/matches", { params });
       return response.data;
     },
   });
 
-  // Get user's predictions for matches
   const { data: predictionsData } = useQuery({
     queryKey: ["user-predictions"],
     queryFn: async () => {
@@ -70,6 +67,7 @@ export default function HomeScreen() {
     acc[pred.match_id] = pred;
     return acc;
   }, {});
+
   const toGroupLetter = (stage) => {
     if (!stage || typeof stage !== "string") return null;
     const match = stage.match(/^group_([a-z])$/i);
@@ -78,21 +76,25 @@ export default function HomeScreen() {
   };
 
   const stages = [
-    { key: "all", label: "Todos" },
-    { key: "group_stage", label: "Grupos" },
-    { key: "round_of_16", label: "Oitavas" },
-    { key: "quarter_final", label: "Quartas" },
-    { key: "semi_final", label: "Semis" },
-    { key: "final", label: "Final" },
+    { key: "all", label: t("home.stage.all") },
+    { key: "group_stage", label: t("home.stage.group") },
+    { key: "round_of_16", label: t("home.stage.r16") },
+    { key: "quarter_final", label: t("home.stage.quarters") },
+    { key: "semi_final", label: t("home.stage.semis") },
+    { key: "final", label: t("home.stage.final") },
   ];
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    const day = date.getDate().toString().padStart(2, "0");
-    const month = (date.getMonth() + 1).toString().padStart(2, "0");
-    const hours = date.getHours().toString().padStart(2, "0");
-    const minutes = date.getMinutes().toString().padStart(2, "0");
-    return { date: `${day}/${month}`, time: `${hours}:${minutes}` };
+    const datePart = date.toLocaleDateString(toLocale(language), {
+      day: "2-digit",
+      month: "2-digit",
+    });
+    const timePart = date.toLocaleTimeString(toLocale(language), {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return { date: datePart, time: timePart };
   };
 
   const getStatusColor = (status) => {
@@ -109,11 +111,11 @@ export default function HomeScreen() {
   const getStatusText = (status) => {
     switch (status) {
       case "live":
-        return "AO VIVO";
+        return t("status.live");
       case "finished":
-        return "FINALIZADO";
+        return t("status.finished");
       default:
-        return "AGENDADO";
+        return t("status.scheduled");
     }
   };
 
@@ -135,7 +137,7 @@ export default function HomeScreen() {
         groupsMap.set(groupKey, {
           key: groupKey,
           letter,
-          label: `Grupo ${letter}`,
+          label: `${t("home.stage.group")} ${letter}`,
           matches: [],
           teamsMap: new Map(),
         });
@@ -149,7 +151,7 @@ export default function HomeScreen() {
         if (!group.teamsMap.has(name)) {
           group.teamsMap.set(name, {
             name,
-            flag: flag || "🏳️",
+            flag: flag || EMPTY_FLAG,
             played: 0,
             wins: 0,
             draws: 0,
@@ -229,6 +231,11 @@ export default function HomeScreen() {
   const groupDataForStandings = buildGroupData(matches);
   const groupDataForDisplay = buildGroupData(filteredMatches);
 
+  const tableHeaders =
+    language === "en"
+      ? { played: "MP", wins: "W", draws: "D", losses: "L", diff: "GD" }
+      : { played: "J", wins: "V", draws: "E", losses: "D", diff: "SG" };
+
   const renderMatch = (match) => {
     const { date, time } = formatDate(match.match_date);
     const prediction = predictionMap[match.id];
@@ -251,7 +258,6 @@ export default function HomeScreen() {
           elevation: 3,
         }}
       >
-        {/* Match Status */}
         <View
           style={{
             flexDirection: "row",
@@ -265,7 +271,7 @@ export default function HomeScreen() {
               fontSize: 12,
               fontWeight: "600",
               color: getStatusColor(match.status),
-              backgroundColor: getStatusColor(match.status) + "20",
+              backgroundColor: `${getStatusColor(match.status)}20`,
               paddingHorizontal: 8,
               paddingVertical: 4,
               borderRadius: 4,
@@ -277,12 +283,11 @@ export default function HomeScreen() {
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Calendar size={14} color="#6B7280" />
             <Text style={{ marginLeft: 4, fontSize: 12, color: "#6B7280" }}>
-              {date} • {time}
+              {date} - {time}
             </Text>
           </View>
         </View>
 
-        {/* Teams and Score */}
         <View
           style={{
             flexDirection: "row",
@@ -293,7 +298,7 @@ export default function HomeScreen() {
         >
           <View style={{ flex: 1, alignItems: "center" }}>
             <Text style={{ fontSize: 32, marginBottom: 4 }}>
-              {homeNoSchedule ? "⏳" : match.home_team_flag || "🏳️"}
+              {homeNoSchedule ? EMPTY_FLAG : match.home_team_flag || EMPTY_FLAG}
             </Text>
             <Text
               style={{
@@ -304,21 +309,17 @@ export default function HomeScreen() {
                 maxWidth: 120,
               }}
             >
-              {homeNoSchedule ? "Sem agenda marcada" : match.home_team_name}
+              {homeNoSchedule ? t("home.noSchedule") : match.home_team_name}
             </Text>
           </View>
 
           <View style={{ alignItems: "center", minWidth: 60 }}>
             {match.status === "finished" ? (
-              <Text
-                style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}
-              >
+              <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>
                 {match.home_score} - {match.away_score}
               </Text>
             ) : match.status === "live" ? (
-              <Text
-                style={{ fontSize: 20, fontWeight: "bold", color: "#FF6B6B" }}
-              >
+              <Text style={{ fontSize: 20, fontWeight: "bold", color: "#FF6B6B" }}>
                 {match.home_score} - {match.away_score}
               </Text>
             ) : (
@@ -328,7 +329,7 @@ export default function HomeScreen() {
 
           <View style={{ flex: 1, alignItems: "center" }}>
             <Text style={{ fontSize: 32, marginBottom: 4 }}>
-              {awayNoSchedule ? "⏳" : match.away_team_flag || "🏳️"}
+              {awayNoSchedule ? EMPTY_FLAG : match.away_team_flag || EMPTY_FLAG}
             </Text>
             <Text
               style={{
@@ -339,12 +340,11 @@ export default function HomeScreen() {
                 maxWidth: 120,
               }}
             >
-              {awayNoSchedule ? "Sem agenda marcada" : match.away_team_name}
+              {awayNoSchedule ? t("home.noSchedule") : match.away_team_name}
             </Text>
           </View>
         </View>
 
-        {/* Match Info */}
         <View
           style={{
             borderTopWidth: 1,
@@ -352,13 +352,7 @@ export default function HomeScreen() {
             paddingTop: 12,
           }}
         >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginBottom: 6,
-            }}
-          >
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
             <MapPin size={16} color="#6B7280" />
             <Text style={{ marginLeft: 6, fontSize: 13, color: "#6B7280" }}>
               {match.stadium_name}, {match.stadium_city}
@@ -366,21 +360,14 @@ export default function HomeScreen() {
           </View>
 
           {match.tv_channel && (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 6,
-              }}
-            >
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
               <Tv size={16} color="#6B7280" />
               <Text style={{ marginLeft: 6, fontSize: 13, color: "#6B7280" }}>
-                {match.tv_channel} • {match.streaming_platform}
+                {match.tv_channel} - {match.streaming_platform}
               </Text>
             </View>
           )}
 
-          {/* User's Prediction */}
           {prediction && (
             <View
               style={{
@@ -390,8 +377,8 @@ export default function HomeScreen() {
                   prediction.is_correct === true
                     ? "#DCFCE7"
                     : prediction.is_correct === false
-                      ? "#FEE2E2"
-                      : "#F3F4F6",
+                    ? "#FEE2E2"
+                    : "#F3F4F6",
                 borderRadius: 8,
                 flexDirection: "row",
                 alignItems: "center",
@@ -399,21 +386,19 @@ export default function HomeScreen() {
               }}
             >
               <Text style={{ fontSize: 13, color: "#374151" }}>
-                Seu palpite: {prediction.predicted_home_score} -{" "}
-                {prediction.predicted_away_score}
+                {t("home.prediction", {
+                  home: prediction.predicted_home_score,
+                  away: prediction.predicted_away_score,
+                })}
               </Text>
               {prediction.is_correct === true && (
-                <Text
-                  style={{ fontSize: 12, color: "#16A34A", fontWeight: "600" }}
-                >
-                  ✅ Parabéns, chute certeiro!
+                <Text style={{ fontSize: 12, color: "#16A34A", fontWeight: "600" }}>
+                  {t("home.predictionHit")}
                 </Text>
               )}
               {prediction.is_correct === false && (
-                <Text
-                  style={{ fontSize: 12, color: "#DC2626", fontWeight: "600" }}
-                >
-                  ❌ Essa foi Quaaaase!
+                <Text style={{ fontSize: 12, color: "#DC2626", fontWeight: "600" }}>
+                  {t("home.predictionMiss")}
                 </Text>
               )}
             </View>
@@ -449,13 +434,25 @@ export default function HomeScreen() {
           }}
         >
           <Text style={{ width: 24, fontSize: 11, color: "#64748B", fontWeight: "700" }}>#</Text>
-          <Text style={{ flex: 1, fontSize: 11, color: "#64748B", fontWeight: "700" }}>Time</Text>
+          <Text style={{ flex: 1, fontSize: 11, color: "#64748B", fontWeight: "700" }}>
+            {t("home.table.team")}
+          </Text>
           <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>P</Text>
-          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>J</Text>
-          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>V</Text>
-          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>E</Text>
-          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>D</Text>
-          <Text style={{ width: 26, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>SG</Text>
+          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>
+            {tableHeaders.played}
+          </Text>
+          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>
+            {tableHeaders.wins}
+          </Text>
+          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>
+            {tableHeaders.draws}
+          </Text>
+          <Text style={{ width: 22, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>
+            {tableHeaders.losses}
+          </Text>
+          <Text style={{ width: 26, textAlign: "center", fontSize: 11, color: "#64748B", fontWeight: "700" }}>
+            {tableHeaders.diff}
+          </Text>
         </View>
 
         {group.standings.map((team) => (
@@ -475,7 +472,7 @@ export default function HomeScreen() {
               {team.position}
             </Text>
             <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
-              <Text style={{ fontSize: 16, marginRight: 6 }}>{team.flag || "🏳️"}</Text>
+              <Text style={{ fontSize: 16, marginRight: 6 }}>{team.flag || EMPTY_FLAG}</Text>
               <Text
                 numberOfLines={1}
                 style={{ fontSize: 12, color: "#0F172A", fontWeight: "600", maxWidth: 140 }}
@@ -503,7 +500,6 @@ export default function HomeScreen() {
     <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
       <StatusBar style="dark" />
 
-      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 16,
@@ -514,39 +510,17 @@ export default function HomeScreen() {
           borderBottomColor: "#E5E7EB",
         }}
       >
-        <View
-          style={{
-            width: "100%",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
+        <View style={{ width: "100%", alignItems: "center", justifyContent: "center" }}>
           <View style={{ alignItems: "center" }}>
-            <Text
-              style={{
-                fontSize: 24,
-                fontWeight: "bold",
-                color: "#1F2937",
-                textAlign: "center",
-              }}
-            >
-              ⚽ GolMaster
+            <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937", textAlign: "center" }}>
+              GolMaster
             </Text>
-            <Text
-              style={{
-                fontSize: 14,
-                color: "#6B7280",
-                marginTop: 2,
-                textAlign: "center",
-              }}
-            >
-              Copa do Mundo 2026
+            <Text style={{ fontSize: 14, color: "#6B7280", marginTop: 2, textAlign: "center" }}>
+              {t("home.subtitle")}
             </Text>
           </View>
-
         </View>
 
-        {/* Stage Filter */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -561,8 +535,7 @@ export default function HomeScreen() {
                 paddingHorizontal: 16,
                 paddingVertical: 8,
                 borderRadius: 20,
-                backgroundColor:
-                  selectedStage === stage.key ? "#16A34A" : "#F3F4F6",
+                backgroundColor: selectedStage === stage.key ? "#16A34A" : "#F3F4F6",
               }}
             >
               <Text
@@ -581,7 +554,7 @@ export default function HomeScreen() {
         <TextInput
           value={searchTerm}
           onChangeText={setSearchTerm}
-          placeholder="Pesquisar jogo, time, estadio..."
+          placeholder={t("common.searchMatches")}
           placeholderTextColor="#94A3B8"
           style={{
             marginTop: 12,
@@ -597,20 +570,10 @@ export default function HomeScreen() {
         />
       </View>
 
-      {/* Matches List */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingTop: 16,
-          paddingBottom: insets.bottom + 20,
-        }}
-        refreshControl={
-          <RefreshControl
-            refreshing={isLoading}
-            onRefresh={refetch}
-            tintColor="#16A34A"
-          />
-        }
+        contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 20 }}
+        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor="#16A34A" />}
       >
         {!isAuthenticated && (
           <View
@@ -623,17 +586,13 @@ export default function HomeScreen() {
               borderLeftColor: "#F59E0B",
             }}
           >
-            <Text style={{ fontSize: 14, color: "#92400E", marginBottom: 8 }}>
-              📱 Faça login para fazer palpites e competir com amigos!
-            </Text>
-            <Text style={{ fontSize: 12, color: "#A16207" }}>
-              Entre com sua conta Google e comece a chutar os placares.
-            </Text>
+            <Text style={{ fontSize: 14, color: "#92400E", marginBottom: 8 }}>{t("home.loginBannerTitle")}</Text>
+            <Text style={{ fontSize: 12, color: "#A16207" }}>{t("home.loginBannerSubtitle")}</Text>
           </View>
         )}
 
         {error && (
-          <View
+          <TouchableOpacity
             style={{
               margin: 16,
               padding: 16,
@@ -642,18 +601,16 @@ export default function HomeScreen() {
               borderLeftWidth: 4,
               borderLeftColor: "#DC2626",
             }}
+            onPress={refetch}
           >
-            <Text style={{ fontSize: 14, color: "#991B1B" }}>
-              Erro ao carregar os jogos. Toque para tentar novamente.
-            </Text>
-          </View>
+            <Text style={{ fontSize: 14, color: "#991B1B" }}>{t("home.loadError")}</Text>
+          </TouchableOpacity>
         )}
 
         {filteredMatches.length === 0 && !isLoading && !error ? (
           <View style={{ alignItems: "center", marginTop: 40 }}>
-            <Text style={{ fontSize: 48, marginBottom: 16 }}>⚽</Text>
             <Text style={{ fontSize: 16, color: "#6B7280" }}>
-              {searchTerm.trim() ? "Nenhum jogo para essa pesquisa" : "Nenhum jogo encontrado"}
+              {searchTerm.trim() ? t("home.noMatchesSearch") : t("home.noMatches")}
             </Text>
           </View>
         ) : selectedStage === "group_stage" ? (
@@ -669,18 +626,13 @@ export default function HomeScreen() {
                   justifyContent: "space-between",
                 }}
               >
-                <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
-                  {group.label}
-                </Text>
+                <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>{group.label}</Text>
                 <Text style={{ fontSize: 12, color: "#64748B", fontWeight: "600" }}>
-                  {group.matches.length} jogos
+                  {t("home.matchesCount", { count: group.matches.length })}
                 </Text>
               </View>
 
-              {renderGroupStandings(
-                groupDataForStandings.find((item) => item.key === group.key) || group
-              )}
-
+              {renderGroupStandings(groupDataForStandings.find((item) => item.key === group.key) || group)}
               {group.matches.map(renderMatch)}
             </View>
           ))
@@ -691,4 +643,3 @@ export default function HomeScreen() {
     </View>
   );
 }
-

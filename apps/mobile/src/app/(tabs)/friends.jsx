@@ -16,19 +16,12 @@ import { Users, UserPlus, Hash, X, Check, Clock, UserMinus, Eye, Target } from "
 import * as Clipboard from "expo-clipboard";
 import KeyboardAvoidingAnimatedView from "@/components/KeyboardAvoidingAnimatedView";
 import { api } from "@/services/api";
-
-const toDateLabel = (value) => {
-  if (!value) return "";
-  const date = new Date(value);
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
-};
+import { formatDateTime, useI18n } from "@/i18n/useI18n";
 
 export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, signIn, auth } = useAuth();
+  const { language, t } = useI18n();
   const queryClient = useQueryClient();
   const [friendCode, setFriendCode] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
@@ -56,9 +49,7 @@ export default function FriendsScreen() {
   } = useQuery({
     queryKey: ["friend-predictions", selectedFriend?.friendship_id],
     queryFn: async () => {
-      if (!selectedFriend?.friendship_id) {
-        return { predictions: [], friend: null };
-      }
+      if (!selectedFriend?.friendship_id) return { predictions: [], friend: null };
       const response = await api.get(`/friends/${selectedFriend.friendship_id}/predictions`);
       return response.data;
     },
@@ -67,19 +58,17 @@ export default function FriendsScreen() {
 
   const addFriendMutation = useMutation({
     mutationFn: async (inviteCode) => {
-      const response = await api.post("/friends", {
-        friend_id: inviteCode,
-      });
+      const response = await api.post("/friends", { friend_id: inviteCode });
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["friends"] });
       setModalVisible(false);
       setFriendCode("");
-      Alert.alert("Sucesso", "Convite de amizade enviado!");
+      Alert.alert(t("common.success"), t("friends.addSuccess"));
     },
     onError: (error) => {
-      Alert.alert("Erro", error.message);
+      Alert.alert(t("common.error"), error.message);
     },
   });
 
@@ -90,12 +79,13 @@ export default function FriendsScreen() {
     },
     onSuccess: (_data, { action }) => {
       queryClient.invalidateQueries({ queryKey: ["friends"] });
-      const message =
-        action === "accept" ? "Amigo adicionado!" : "Convite recusado";
-      Alert.alert("Sucesso", message);
+      Alert.alert(
+        t("common.success"),
+        action === "accept" ? t("friends.friendAdded") : t("friends.inviteDeclined")
+      );
     },
     onError: (error) => {
-      Alert.alert("Erro", error.message);
+      Alert.alert(t("common.error"), error.message);
     },
   });
 
@@ -106,11 +96,11 @@ export default function FriendsScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["friends"] });
-      Alert.alert("Sucesso", "Amizade desfeita.");
+      Alert.alert(t("common.success"), t("friends.friendRemoved"));
     },
     onError: (error) => {
-      const message = error?.response?.data?.error || error?.message || "Falha ao desfazer amizade.";
-      Alert.alert("Erro", message);
+      const message = error?.response?.data?.error || error?.message || "Request failed.";
+      Alert.alert(t("common.error"), message);
     },
   });
 
@@ -120,33 +110,27 @@ export default function FriendsScreen() {
   const handleAddFriend = () => {
     const inviteCode = friendCode.trim().toUpperCase();
     if (!inviteCode) {
-      Alert.alert("Erro", "Digite um ID de amigo valido");
+      Alert.alert(t("common.error"), t("friends.invalidCode"));
       return;
     }
-
     addFriendMutation.mutate(inviteCode);
   };
 
   const handleCopyFriendCode = async () => {
     if (!myFriendCode) {
-      Alert.alert("Erro", "Seu ID de amigo ainda nao esta disponivel.");
+      Alert.alert(t("common.error"), t("friends.codeUnavailable"));
       return;
     }
-
     await Clipboard.setStringAsync(myFriendCode);
-    Alert.alert("Copiado", "Seu ID de amigo foi copiado.");
+    Alert.alert(t("friends.copiedTitle"), t("friends.copiedMessage"));
   };
 
   const handleFriendAction = (friendshipId, action) => {
-    const message =
-      action === "accept"
-        ? "Tem certeza que deseja aceitar este convite?"
-        : "Tem certeza que deseja recusar este convite?";
-
-    Alert.alert("Confirmacao", message, [
-      { text: "Cancelar", style: "cancel" },
+    const message = action === "accept" ? t("friends.confirmAccept") : t("friends.confirmDecline");
+    Alert.alert(t("friends.confirmTitle"), message, [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: action === "accept" ? "Aceitar" : "Recusar",
+        text: action === "accept" ? t("friends.accept") : t("friends.decline"),
         onPress: () => respondFriendMutation.mutate({ friendshipId, action }),
       },
     ]);
@@ -154,16 +138,16 @@ export default function FriendsScreen() {
 
   const handleRemoveFriend = (friendshipId, friendName) => {
     Alert.alert(
-      "Desfazer amizade",
-      `Deseja remover ${friendName || "este amigo"} da sua lista de amigos?`,
+      t("friends.removeAskTitle"),
+      t("friends.removeAskMessage", { name: friendName || t("friends.friendFallbackName") }),
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Desfazer",
+          text: t("friends.removeAction"),
           style: "destructive",
           onPress: () => removeFriendMutation.mutate(friendshipId),
         },
-      ],
+      ]
     );
   };
 
@@ -199,7 +183,6 @@ export default function FriendsScreen() {
 
   const renderFriend = (friend) => {
     const isRequest = selectedTab === "requests";
-
     return (
       <View
         key={friend.friendship_id}
@@ -216,21 +199,9 @@ export default function FriendsScreen() {
           elevation: 3,
         }}
       >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <View style={{ flex: 1 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 8,
-              }}
-            >
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
               <View
                 style={{
                   width: 40,
@@ -242,22 +213,15 @@ export default function FriendsScreen() {
                   marginRight: 12,
                 }}
               >
-                <Text
-                  style={{ color: "white", fontSize: 16, fontWeight: "bold" }}
-                >
+                <Text style={{ color: "white", fontSize: 16, fontWeight: "bold" }}>
                   {(friend.name || friend.email || "?").charAt(0).toUpperCase()}
                 </Text>
               </View>
-
               <View style={{ flex: 1 }}>
-                <Text
-                  style={{ fontSize: 16, fontWeight: "600", color: "#1F2937" }}
-                >
-                  {friend.name || "Usuario"}
+                <Text style={{ fontSize: 16, fontWeight: "600", color: "#1F2937" }}>
+                  {friend.name || t("friends.userFallback")}
                 </Text>
-                <Text style={{ fontSize: 13, color: "#6B7280" }}>
-                  {friend.email}
-                </Text>
+                <Text style={{ fontSize: 13, color: "#6B7280" }}>{friend.email}</Text>
               </View>
             </View>
 
@@ -272,44 +236,16 @@ export default function FriendsScreen() {
                 }}
               >
                 <View style={{ alignItems: "center" }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "bold",
-                      color: "#1F2937",
-                    }}
-                  >
-                    {friend.total_predictions}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: "#6B7280" }}>
-                    Palpites
-                  </Text>
+                  <Text style={{ fontSize: 14, fontWeight: "bold", color: "#1F2937" }}>{friend.total_predictions}</Text>
+                  <Text style={{ fontSize: 11, color: "#6B7280" }}>{t("friends.statsPredictions")}</Text>
                 </View>
                 <View style={{ alignItems: "center" }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "bold",
-                      color: "#16A34A",
-                    }}
-                  >
-                    {friend.correct_predictions}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: "#6B7280" }}>
-                    Acertos
-                  </Text>
+                  <Text style={{ fontSize: 14, fontWeight: "bold", color: "#16A34A" }}>{friend.correct_predictions}</Text>
+                  <Text style={{ fontSize: 11, color: "#6B7280" }}>{t("friends.statsHits")}</Text>
                 </View>
                 <View style={{ alignItems: "center" }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "bold",
-                      color: "#2563EB",
-                    }}
-                  >
-                    {friend.success_rate}%
-                  </Text>
-                  <Text style={{ fontSize: 11, color: "#6B7280" }}>Taxa</Text>
+                  <Text style={{ fontSize: 14, fontWeight: "bold", color: "#2563EB" }}>{friend.success_rate}%</Text>
+                  <Text style={{ fontSize: 11, color: "#6B7280" }}>{t("friends.statsRate")}</Text>
                 </View>
               </View>
             )}
@@ -320,24 +256,13 @@ export default function FriendsScreen() {
               <>
                 <TouchableOpacity
                   onPress={() => handleFriendAction(friend.friendship_id, "decline")}
-                  style={{
-                    backgroundColor: "#FEE2E2",
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 6,
-                  }}
+                  style={{ backgroundColor: "#FEE2E2", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 }}
                 >
                   <X size={16} color="#DC2626" />
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   onPress={() => handleFriendAction(friend.friendship_id, "accept")}
-                  style={{
-                    backgroundColor: "#DCFCE7",
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 6,
-                  }}
+                  style={{ backgroundColor: "#DCFCE7", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6 }}
                 >
                   <Check size={16} color="#16A34A" />
                 </TouchableOpacity>
@@ -365,9 +290,7 @@ export default function FriendsScreen() {
               }}
             >
               <Eye size={16} color="#1D4ED8" />
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1D4ED8" }}>
-                Ver palpites
-              </Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#1D4ED8" }}>{t("friends.viewPredictions")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => handleRemoveFriend(friend.friendship_id, friend.name)}
@@ -386,9 +309,7 @@ export default function FriendsScreen() {
               }}
             >
               <UserMinus size={16} color="#B91C1C" />
-              <Text style={{ fontSize: 13, fontWeight: "700", color: "#B91C1C" }}>
-                Desfazer amizade
-              </Text>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: "#B91C1C" }}>{t("friends.removeFriend")}</Text>
             </TouchableOpacity>
           </>
         ) : null}
@@ -400,7 +321,6 @@ export default function FriendsScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
         <StatusBar style="dark" />
-
         <View
           style={{
             paddingTop: insets.top + 16,
@@ -411,19 +331,9 @@ export default function FriendsScreen() {
             borderBottomColor: "#E5E7EB",
           }}
         >
-          <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>
-            Amigos
-          </Text>
+          <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>{t("friends.title")}</Text>
         </View>
-
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 32,
-          }}
-        >
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32 }}>
           <Users size={64} color="#9CA3AF" />
           <Text
             style={{
@@ -434,9 +344,8 @@ export default function FriendsScreen() {
               textAlign: "center",
             }}
           >
-            Faca login para competir com amigos
+            {t("friends.loginTitle")}
           </Text>
-
           <TouchableOpacity
             onPress={signIn}
             style={{
@@ -447,9 +356,7 @@ export default function FriendsScreen() {
               marginTop: 24,
             }}
           >
-            <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>
-              Fazer login
-            </Text>
+            <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>{t("common.login")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -457,12 +364,8 @@ export default function FriendsScreen() {
   }
 
   return (
-    <KeyboardAvoidingAnimatedView
-      style={{ flex: 1, backgroundColor: "#F9FAFB" }}
-      behavior="padding"
-    >
+    <KeyboardAvoidingAnimatedView style={{ flex: 1, backgroundColor: "#F9FAFB" }} behavior="padding">
       <StatusBar style="dark" />
-
       <View
         style={{
           paddingTop: insets.top + 16,
@@ -473,17 +376,8 @@ export default function FriendsScreen() {
           borderBottomColor: "#E5E7EB",
         }}
       >
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>
-            Amigos
-          </Text>
-
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>{t("friends.title")}</Text>
           <TouchableOpacity
             onPress={() => setModalVisible(true)}
             style={{
@@ -497,74 +391,43 @@ export default function FriendsScreen() {
             }}
           >
             <UserPlus size={16} color="white" />
-            <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>
-              Adicionar
-            </Text>
+            <Text style={{ color: "white", fontSize: 14, fontWeight: "600" }}>{t("friends.add")}</Text>
           </TouchableOpacity>
         </View>
 
-        <View
-          style={{
-            flexDirection: "row",
-            marginTop: 16,
-            backgroundColor: "#F3F4F6",
-            borderRadius: 8,
-            padding: 4,
-          }}
-        >
+        <View style={{ flexDirection: "row", marginTop: 16, backgroundColor: "#F3F4F6", borderRadius: 8, padding: 4 }}>
           <TouchableOpacity
             onPress={() => setSelectedTab("friends")}
             style={{
               flex: 1,
               paddingVertical: 8,
               alignItems: "center",
-              backgroundColor:
-                selectedTab === "friends" ? "white" : "transparent",
+              backgroundColor: selectedTab === "friends" ? "white" : "transparent",
               borderRadius: 6,
             }}
           >
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: selectedTab === "friends" ? "#1F2937" : "#6B7280",
-              }}
-            >
-              Meus Amigos
+            <Text style={{ fontSize: 14, fontWeight: "600", color: selectedTab === "friends" ? "#1F2937" : "#6B7280" }}>
+              {t("friends.tabFriends")}
             </Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             onPress={() => setSelectedTab("requests")}
             style={{
               flex: 1,
               paddingVertical: 8,
               alignItems: "center",
-              backgroundColor:
-                selectedTab === "requests" ? "white" : "transparent",
+              backgroundColor: selectedTab === "requests" ? "white" : "transparent",
               borderRadius: 6,
             }}
           >
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: selectedTab === "requests" ? "#1F2937" : "#6B7280",
-              }}
-            >
-              Convites
+            <Text style={{ fontSize: 14, fontWeight: "600", color: selectedTab === "requests" ? "#1F2937" : "#6B7280" }}>
+              {t("friends.tabRequests")}
             </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingTop: 16,
-          paddingBottom: insets.bottom + 20,
-        }}
-      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 20 }}>
         <View
           style={{
             marginHorizontal: 16,
@@ -576,20 +439,11 @@ export default function FriendsScreen() {
             borderColor: "#BBF7D0",
           }}
         >
-          <Text style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>
-            Seu ID de amigo
-          </Text>
-          <TouchableOpacity
-            onPress={handleCopyFriendCode}
-            style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-          >
+          <Text style={{ fontSize: 12, color: "#166534", marginBottom: 6 }}>{t("friends.myCode")}</Text>
+          <TouchableOpacity onPress={handleCopyFriendCode} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Hash size={16} color="#166534" />
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#14532D" }}>
-              {myFriendCode || "--"}
-            </Text>
-            <Text style={{ fontSize: 12, color: "#166534", marginLeft: "auto" }}>
-              Toque para copiar
-            </Text>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#14532D" }}>{myFriendCode || "--"}</Text>
+            <Text style={{ fontSize: 12, color: "#166534", marginLeft: "auto" }}>{t("friends.tapToCopy")}</Text>
           </TouchableOpacity>
         </View>
 
@@ -598,39 +452,18 @@ export default function FriendsScreen() {
             {selectedTab === "friends" ? (
               <>
                 <Users size={48} color="#9CA3AF" />
-                <Text
-                  style={{
-                    fontSize: 16,
-                    color: "#6B7280",
-                    textAlign: "center",
-                    marginTop: 16,
-                  }}
-                >
-                  Voce ainda nao tem amigos
+                <Text style={{ fontSize: 16, color: "#6B7280", textAlign: "center", marginTop: 16 }}>
+                  {t("friends.noFriends")}
                 </Text>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: "#9CA3AF",
-                    textAlign: "center",
-                    marginTop: 4,
-                  }}
-                >
-                  Adicione amigos pelo ID para competir
+                <Text style={{ fontSize: 14, color: "#9CA3AF", textAlign: "center", marginTop: 4 }}>
+                  {t("friends.noFriendsHint")}
                 </Text>
               </>
             ) : (
               <>
                 <Clock size={48} color="#9CA3AF" />
-                <Text
-                  style={{
-                    fontSize: 16,
-                    color: "#6B7280",
-                    textAlign: "center",
-                    marginTop: 16,
-                  }}
-                >
-                  Nenhum convite pendente
+                <Text style={{ fontSize: 16, color: "#6B7280", textAlign: "center", marginTop: 16 }}>
+                  {t("friends.noRequests")}
                 </Text>
               </>
             )}
@@ -640,43 +473,14 @@ export default function FriendsScreen() {
         )}
       </ScrollView>
 
-      <Modal
-        visible={friendPredictionsModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeFriendPredictions}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.45)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "white",
-              borderRadius: 16,
-              padding: 16,
-              width: "94%",
-              maxWidth: 500,
-              maxHeight: "86%",
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
+      <Modal visible={friendPredictionsModalVisible} animationType="slide" transparent onRequestClose={closeFriendPredictions}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" }}>
+          <View style={{ backgroundColor: "white", borderRadius: 16, padding: 16, width: "94%", maxWidth: 500, maxHeight: "86%" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>
-                  Palpites do amigo
-                </Text>
+                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>{t("friends.friendPredTitle")}</Text>
                 <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-                  {friendPredictionsData?.friend?.name || selectedFriend?.name || "Amigo"}
+                  {friendPredictionsData?.friend?.name || selectedFriend?.name || t("friends.friendFallbackName")}
                 </Text>
               </View>
               <TouchableOpacity onPress={closeFriendPredictions}>
@@ -687,7 +491,7 @@ export default function FriendsScreen() {
             <TextInput
               value={friendPredictionSearch}
               onChangeText={setFriendPredictionSearch}
-              placeholder="Pesquisar time, jogo ou estadio..."
+              placeholder={t("friends.friendPredSearch")}
               placeholderTextColor="#94A3B8"
               style={{
                 marginTop: 12,
@@ -715,19 +519,15 @@ export default function FriendsScreen() {
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Target size={16} color="#3730A3" />
-                <Text style={{ color: "#3730A3", fontSize: 13, fontWeight: "600" }}>
-                  Total de palpites
-                </Text>
+                <Text style={{ color: "#3730A3", fontSize: 13, fontWeight: "600" }}>{t("friends.totalPredictions")}</Text>
               </View>
-              <Text style={{ color: "#312E81", fontSize: 14, fontWeight: "800" }}>
-                {friendPredictionsData?.total ?? 0}
-              </Text>
+              <Text style={{ color: "#312E81", fontSize: 14, fontWeight: "800" }}>{friendPredictionsData?.total ?? 0}</Text>
             </View>
 
             <ScrollView style={{ marginTop: 12 }} contentContainerStyle={{ paddingBottom: 6 }}>
               {friendPredictionsLoading ? (
                 <View style={{ paddingVertical: 30, alignItems: "center" }}>
-                  <Text style={{ color: "#6B7280" }}>Carregando palpites...</Text>
+                  <Text style={{ color: "#6B7280" }}>{t("friends.loadingPredictions")}</Text>
                 </View>
               ) : friendPredictionsError ? (
                 <View
@@ -739,19 +539,15 @@ export default function FriendsScreen() {
                     borderLeftColor: "#DC2626",
                   }}
                 >
-                  <Text style={{ fontSize: 13, color: "#991B1B" }}>
-                    Erro ao carregar os palpites do amigo.
-                  </Text>
+                  <Text style={{ fontSize: 13, color: "#991B1B" }}>{t("friends.predLoadError")}</Text>
                   <TouchableOpacity onPress={refetchFriendPredictions} style={{ marginTop: 8 }}>
-                    <Text style={{ color: "#B91C1C", fontWeight: "700" }}>Tentar novamente</Text>
+                    <Text style={{ color: "#B91C1C", fontWeight: "700" }}>{t("common.tryAgain")}</Text>
                   </TouchableOpacity>
                 </View>
               ) : filteredFriendPredictions.length === 0 ? (
                 <View style={{ paddingVertical: 28, alignItems: "center" }}>
                   <Text style={{ color: "#6B7280" }}>
-                    {friendPredictionSearch.trim()
-                      ? "Nenhum palpite para essa pesquisa"
-                      : "Esse amigo ainda nao registrou palpites"}
+                    {friendPredictionSearch.trim() ? t("friends.noPredictionsSearch") : t("friends.noPredictions")}
                   </Text>
                 </View>
               ) : (
@@ -760,10 +556,10 @@ export default function FriendsScreen() {
                   const status = match.status || "scheduled";
                   const hitLabel =
                     prediction.is_correct === true
-                      ? { text: "Acertou", bg: "#DCFCE7", color: "#166534" }
+                      ? { text: t("friends.hit"), bg: "#DCFCE7", color: "#166534" }
                       : prediction.is_correct === false
-                        ? { text: "Errou", bg: "#FEE2E2", color: "#B91C1C" }
-                        : { text: "Em aberto", bg: "#E2E8F0", color: "#334155" };
+                      ? { text: t("friends.miss"), bg: "#FEE2E2", color: "#B91C1C" }
+                      : { text: t("friends.open"), bg: "#E2E8F0", color: "#334155" };
 
                   return (
                     <View
@@ -778,41 +574,31 @@ export default function FriendsScreen() {
                       }}
                     >
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                        <Text
-                          style={{ fontSize: 13, fontWeight: "700", color: "#0F172A", flex: 1, paddingRight: 8 }}
-                        >
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: "#0F172A", flex: 1, paddingRight: 8 }}>
                           {match.home_team_name} vs {match.away_team_name}
                         </Text>
-                        <View
-                          style={{
-                            backgroundColor: hitLabel.bg,
-                            borderRadius: 999,
-                            paddingHorizontal: 8,
-                            paddingVertical: 4,
-                          }}
-                        >
-                          <Text style={{ fontSize: 11, color: hitLabel.color, fontWeight: "700" }}>
-                            {hitLabel.text}
-                          </Text>
+                        <View style={{ backgroundColor: hitLabel.bg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 }}>
+                          <Text style={{ fontSize: 11, color: hitLabel.color, fontWeight: "700" }}>{hitLabel.text}</Text>
                         </View>
                       </View>
 
                       <Text style={{ marginTop: 6, fontSize: 12, color: "#64748B" }}>
-                        {toDateLabel(match.match_date)}
+                        {formatDateTime(match.match_date, language)}
                       </Text>
 
                       <View style={{ marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                         <Text style={{ fontSize: 12, color: "#334155" }}>
-                          Palpite: {prediction.predicted_home_score} - {prediction.predicted_away_score}
+                          {t("friends.predLabel", {
+                            home: prediction.predicted_home_score,
+                            away: prediction.predicted_away_score,
+                          })}
                         </Text>
-                        <Text style={{ fontSize: 11, color: "#64748B", textTransform: "capitalize" }}>
-                          {status}
-                        </Text>
+                        <Text style={{ fontSize: 11, color: "#64748B", textTransform: "capitalize" }}>{status}</Text>
                       </View>
 
                       {status === "finished" ? (
                         <Text style={{ marginTop: 4, fontSize: 12, color: "#0F172A", fontWeight: "600" }}>
-                          Resultado: {match.home_score} - {match.away_score}
+                          {t("friends.resultLabel", { home: match.home_score, away: match.away_score })}
                         </Text>
                       ) : null}
                     </View>
@@ -824,50 +610,17 @@ export default function FriendsScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "white",
-              borderRadius: 16,
-              padding: 24,
-              width: "90%",
-              maxWidth: 400,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 24,
-              }}
-            >
-              <Text
-                style={{ fontSize: 18, fontWeight: "bold", color: "#1F2937" }}
-              >
-                Adicionar Amigo
-              </Text>
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" }}>
+          <View style={{ backgroundColor: "white", borderRadius: 16, padding: 24, width: "90%", maxWidth: 400 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <Text style={{ fontSize: 18, fontWeight: "bold", color: "#1F2937" }}>{t("friends.addFriendTitle")}</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <X size={24} color="#6B7280" />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ fontSize: 14, color: "#6B7280", marginBottom: 12 }}>
-              Digite o ID do seu amigo para enviar um convite:
-            </Text>
+            <Text style={{ fontSize: 14, color: "#6B7280", marginBottom: 12 }}>{t("friends.addFriendHint")}</Text>
 
             <View
               style={{
@@ -887,11 +640,7 @@ export default function FriendsScreen() {
                 onChangeText={setFriendCode}
                 placeholder="GM-ABCD-1234"
                 autoCapitalize="none"
-                style={{
-                  flex: 1,
-                  marginLeft: 12,
-                  fontSize: 16,
-                }}
+                style={{ flex: 1, marginLeft: 12, fontSize: 16 }}
               />
             </View>
 
@@ -906,25 +655,22 @@ export default function FriendsScreen() {
                   alignItems: "center",
                 }}
               >
-                <Text style={{ fontSize: 16, color: "#6B7280" }}>Cancelar</Text>
+                <Text style={{ fontSize: 16, color: "#6B7280" }}>{t("common.cancel")}</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 onPress={handleAddFriend}
-                disabled={addFriendMutation.isLoading}
+                disabled={addFriendMutation.isPending}
                 style={{
                   flex: 1,
                   backgroundColor: "#16A34A",
                   paddingVertical: 12,
                   borderRadius: 8,
                   alignItems: "center",
-                  opacity: addFriendMutation.isLoading ? 0.7 : 1,
+                  opacity: addFriendMutation.isPending ? 0.7 : 1,
                 }}
               >
-                <Text
-                  style={{ fontSize: 16, color: "white", fontWeight: "600" }}
-                >
-                  {addFriendMutation.isLoading ? "Enviando..." : "Enviar convite"}
+                <Text style={{ fontSize: 16, color: "white", fontWeight: "600" }}>
+                  {addFriendMutation.isPending ? t("friends.sending") : t("friends.sendInvite")}
                 </Text>
               </TouchableOpacity>
             </View>

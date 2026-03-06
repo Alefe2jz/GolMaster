@@ -15,15 +15,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/utils/auth/useAuth";
 import { Trophy, X } from "lucide-react-native";
 import { api } from "@/services/api";
+import { formatDateTime, useI18n } from "@/i18n/useI18n";
 
-const toDateLabel = (value) => {
-  if (!value) return "";
-  const date = new Date(value);
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  })}`;
-};
+const EMPTY_FLAG = "🏳️";
 
 const isMatchLocked = (match) => {
   if (!match?.match_date) return true;
@@ -34,6 +28,7 @@ const isMatchLocked = (match) => {
 export default function PredictionsScreen() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, signIn } = useAuth();
+  const { language, t } = useI18n();
   const queryClient = useQueryClient();
 
   const [selectedMatch, setSelectedMatch] = useState(null);
@@ -48,10 +43,10 @@ export default function PredictionsScreen() {
     error: matchesError,
     refetch: refetchMatches,
   } = useQuery({
-    queryKey: ["upcoming-matches"],
+    queryKey: ["upcoming-matches", language],
     queryFn: async () => {
       const response = await api.get("/matches", {
-        params: { status: "scheduled" },
+        params: { status: "scheduled", lang: language },
       });
       return response.data;
     },
@@ -81,10 +76,10 @@ export default function PredictionsScreen() {
       setModalVisible(false);
       setHomeScore("");
       setAwayScore("");
-      Alert.alert("Sucesso", "Palpite salvo com sucesso!");
+      Alert.alert(t("common.success"), t("pred.saveSuccess"));
     },
     onError: (error) => {
-      Alert.alert("Erro", error.message || "Nao foi possivel salvar o palpite.");
+      Alert.alert(t("common.error"), error.message || t("pred.saveError"));
     },
   });
 
@@ -98,10 +93,10 @@ export default function PredictionsScreen() {
       setModalVisible(false);
       setHomeScore("");
       setAwayScore("");
-      Alert.alert("Sucesso", "Palpite cancelado.");
+      Alert.alert(t("common.success"), t("pred.removeSuccess"));
     },
     onError: (error) => {
-      Alert.alert("Erro", error.message || "Nao foi possivel cancelar o palpite.");
+      Alert.alert(t("common.error"), error.message || t("pred.removeError"));
     },
   });
 
@@ -144,20 +139,19 @@ export default function PredictionsScreen() {
 
   const handleMakePrediction = (match) => {
     if (!isAuthenticated) {
-      Alert.alert("Login necessario", "Faca login para continuar.", [
-        { text: "Cancelar", style: "cancel" },
-        { text: "Fazer login", onPress: signIn },
+      Alert.alert(t("pred.loginNeededTitle"), t("pred.loginNeededMessage"), [
+        { text: t("common.cancel"), style: "cancel" },
+        { text: t("common.login"), onPress: signIn },
       ]);
       return;
     }
 
     if (isMatchLocked(match)) {
-      Alert.alert("Palpite bloqueado", "Nao e possivel alterar palpites apos o inicio do jogo.");
+      Alert.alert(t("pred.lockedTitle"), t("pred.lockedMessage"));
       return;
     }
 
     setSelectedMatch(match);
-
     const existing = predictionMap[match.id];
     if (existing) {
       setHomeScore(String(existing.predicted_home_score));
@@ -166,22 +160,20 @@ export default function PredictionsScreen() {
       setHomeScore("");
       setAwayScore("");
     }
-
     setModalVisible(true);
   };
 
   const handleSavePrediction = () => {
     if (!selectedMatch) return;
     if (isMatchLocked(selectedMatch)) {
-      Alert.alert("Palpite bloqueado", "Nao e possivel alterar palpites apos o inicio do jogo.");
+      Alert.alert(t("pred.lockedTitle"), t("pred.lockedMessage"));
       return;
     }
 
     const home = Number(homeScore);
     const away = Number(awayScore);
-
     if (!Number.isInteger(home) || !Number.isInteger(away) || home < 0 || away < 0) {
-      Alert.alert("Erro", "Informe placares validos (0 ou mais).");
+      Alert.alert(t("common.error"), t("pred.invalidScore"));
       return;
     }
 
@@ -194,16 +186,15 @@ export default function PredictionsScreen() {
 
   const handleRemovePrediction = () => {
     if (!selectedMatch) return;
-
     if (isMatchLocked(selectedMatch)) {
-      Alert.alert("Palpite bloqueado", "Nao e possivel alterar palpites apos o inicio do jogo.");
+      Alert.alert(t("pred.lockedTitle"), t("pred.lockedMessage"));
       return;
     }
 
-    Alert.alert("Cancelar palpite", "Deseja remover este palpite?", [
-      { text: "Voltar", style: "cancel" },
+    Alert.alert(t("pred.removeAskTitle"), t("pred.removeAskMessage"), [
+      { text: t("pred.back"), style: "cancel" },
       {
-        text: "Remover",
+        text: t("pred.removeAction"),
         style: "destructive",
         onPress: () => removePredictionMutation.mutate(selectedMatch.id),
       },
@@ -214,7 +205,6 @@ export default function PredictionsScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
         <StatusBar style="dark" />
-
         <View
           style={{
             paddingTop: insets.top + 16,
@@ -225,30 +215,13 @@ export default function PredictionsScreen() {
             borderBottomColor: "#E5E7EB",
           }}
         >
-          <Text style={{ fontSize: 24, fontWeight: "bold" }}>Palpites</Text>
+          <Text style={{ fontSize: 24, fontWeight: "bold" }}>{t("pred.title")}</Text>
         </View>
-
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 32,
-          }}
-        >
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32 }}>
           <Trophy size={64} color="#9CA3AF" />
-
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "600",
-              marginTop: 16,
-              textAlign: "center",
-            }}
-          >
-            Faca login para comecar a dar palpites
+          <Text style={{ fontSize: 20, fontWeight: "600", marginTop: 16, textAlign: "center" }}>
+            {t("pred.loginTitle")}
           </Text>
-
           <TouchableOpacity
             onPress={signIn}
             style={{
@@ -259,9 +232,7 @@ export default function PredictionsScreen() {
               marginTop: 24,
             }}
           >
-            <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>
-              Fazer login
-            </Text>
+            <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>{t("common.login")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -271,7 +242,6 @@ export default function PredictionsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
       <StatusBar style="dark" />
-
       <View
         style={{
           paddingTop: insets.top + 16,
@@ -282,14 +252,12 @@ export default function PredictionsScreen() {
           borderBottomColor: "#E5E7EB",
         }}
       >
-        <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>Palpites</Text>
-        <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>
-          Escolha um jogo e registre seu palpite
-        </Text>
+        <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>{t("pred.title")}</Text>
+        <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>{t("pred.subtitle")}</Text>
         <TextInput
           value={searchTerm}
           onChangeText={setSearchTerm}
-          placeholder="Pesquisar jogo, time, estadio..."
+          placeholder={t("common.searchMatches")}
           placeholderTextColor="#94A3B8"
           style={{
             marginTop: 12,
@@ -305,16 +273,10 @@ export default function PredictionsScreen() {
         />
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingTop: 16,
-          paddingBottom: insets.bottom + 20,
-        }}
-      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 20 }}>
         {matchesLoading ? (
           <View style={{ alignItems: "center", marginTop: 40 }}>
-            <Text style={{ fontSize: 16, color: "#6B7280" }}>Carregando jogos...</Text>
+            <Text style={{ fontSize: 16, color: "#6B7280" }}>{t("pred.loadingMatches")}</Text>
           </View>
         ) : matchesError ? (
           <View
@@ -327,17 +289,15 @@ export default function PredictionsScreen() {
               borderLeftColor: "#DC2626",
             }}
           >
-            <Text style={{ fontSize: 14, color: "#991B1B" }}>
-              Erro ao carregar jogos. Toque para tentar novamente.
-            </Text>
+            <Text style={{ fontSize: 14, color: "#991B1B" }}>{t("pred.loadError")}</Text>
             <TouchableOpacity onPress={refetchMatches} style={{ marginTop: 10 }}>
-              <Text style={{ color: "#DC2626", fontWeight: "600" }}>Tentar novamente</Text>
+              <Text style={{ color: "#DC2626", fontWeight: "600" }}>{t("common.tryAgain")}</Text>
             </TouchableOpacity>
           </View>
         ) : filteredMatches.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 40 }}>
             <Text style={{ fontSize: 16, color: "#6B7280" }}>
-              {searchTerm.trim() ? "Nenhum jogo para essa pesquisa" : "Nenhum jogo disponivel"}
+              {searchTerm.trim() ? t("pred.noMatchesSearch") : t("pred.noMatches")}
             </Text>
           </View>
         ) : (
@@ -360,18 +320,12 @@ export default function PredictionsScreen() {
                 opacity: isMatchLocked(match) ? 0.75 : 1,
               }}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <Text style={{ fontSize: 16, fontWeight: "600", color: "#1F2937", flex: 1 }}>
                   {match.home_team_name} vs {match.away_team_name}
                 </Text>
                 <Text style={{ fontSize: 12, color: "#6B7280", marginLeft: 10 }}>
-                  {toDateLabel(match.match_date)}
+                  {formatDateTime(match.match_date, language)}
                 </Text>
               </View>
 
@@ -386,8 +340,10 @@ export default function PredictionsScreen() {
                   }}
                 >
                   <Text style={{ color: "#166534", fontSize: 13 }}>
-                    Seu palpite: {predictionMap[match.id].predicted_home_score} -{" "}
-                    {predictionMap[match.id].predicted_away_score}
+                    {t("pred.cardPrediction", {
+                      home: predictionMap[match.id].predicted_home_score,
+                      away: predictionMap[match.id].predicted_away_score,
+                    })}
                   </Text>
                 </View>
               ) : (
@@ -400,7 +356,7 @@ export default function PredictionsScreen() {
                     paddingHorizontal: 10,
                   }}
                 >
-                  <Text style={{ color: "#92400E", fontSize: 13 }}>Toque para palpitar</Text>
+                  <Text style={{ color: "#92400E", fontSize: 13 }}>{t("pred.touchToPredict")}</Text>
                 </View>
               )}
 
@@ -415,9 +371,7 @@ export default function PredictionsScreen() {
                     paddingVertical: 4,
                   }}
                 >
-                  <Text style={{ color: "#334155", fontSize: 11, fontWeight: "700" }}>
-                    Palpite bloqueado
-                  </Text>
+                  <Text style={{ color: "#334155", fontSize: 11, fontWeight: "700" }}>{t("pred.lockedTitle")}</Text>
                 </View>
               ) : null}
             </TouchableOpacity>
@@ -444,9 +398,7 @@ export default function PredictionsScreen() {
             }}
           >
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>
-                Registrar palpite
-              </Text>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>{t("pred.modalTitle")}</Text>
               <TouchableOpacity onPress={closeModal}>
                 <X size={20} color="#64748B" />
               </TouchableOpacity>
@@ -455,7 +407,7 @@ export default function PredictionsScreen() {
             {selectedMatch ? (
               <>
                 <Text style={{ marginTop: 8, fontSize: 12, color: "#64748B" }}>
-                  {toDateLabel(selectedMatch.match_date)}
+                  {formatDateTime(selectedMatch.match_date, language)}
                 </Text>
 
                 <View
@@ -470,14 +422,14 @@ export default function PredictionsScreen() {
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                     <View style={{ flex: 1, alignItems: "center" }}>
-                      <Text style={{ fontSize: 30 }}>{selectedMatch.home_team_flag || "???"}</Text>
+                      <Text style={{ fontSize: 30 }}>{selectedMatch.home_team_flag || EMPTY_FLAG}</Text>
                       <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: "#0F172A", textAlign: "center" }}>
                         {selectedMatch.home_team_name}
                       </Text>
                     </View>
                     <Text style={{ paddingHorizontal: 10, color: "#94A3B8", fontWeight: "700" }}>x</Text>
                     <View style={{ flex: 1, alignItems: "center" }}>
-                      <Text style={{ fontSize: 30 }}>{selectedMatch.away_team_flag || "???"}</Text>
+                      <Text style={{ fontSize: 30 }}>{selectedMatch.away_team_flag || EMPTY_FLAG}</Text>
                       <Text style={{ marginTop: 4, fontSize: 13, fontWeight: "600", color: "#0F172A", textAlign: "center" }}>
                         {selectedMatch.away_team_name}
                       </Text>
@@ -488,7 +440,7 @@ export default function PredictionsScreen() {
                 <View style={{ flexDirection: "row", gap: 12, marginTop: 14 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ marginBottom: 6, fontSize: 12, color: "#475569", fontWeight: "600" }}>
-                      Gols {selectedMatch.home_team_name}
+                      {t("pred.goalsFor", { team: selectedMatch.home_team_name })}
                     </Text>
                     <TextInput
                       value={homeScore}
@@ -511,7 +463,7 @@ export default function PredictionsScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ marginBottom: 6, fontSize: 12, color: "#475569", fontWeight: "600" }}>
-                      Gols {selectedMatch.away_team_name}
+                      {t("pred.goalsFor", { team: selectedMatch.away_team_name })}
                     </Text>
                     <TextInput
                       value={awayScore}
@@ -550,7 +502,7 @@ export default function PredictionsScreen() {
                     }}
                   >
                     <Text style={{ color: "#B91C1C", fontWeight: "700" }}>
-                      {removePredictionMutation.isPending ? "Cancelando..." : "Cancelar palpite"}
+                      {removePredictionMutation.isPending ? t("pred.removePending") : t("pred.removeButton")}
                     </Text>
                   </TouchableOpacity>
                 ) : null}
@@ -566,7 +518,7 @@ export default function PredictionsScreen() {
                       backgroundColor: "#E2E8F0",
                     }}
                   >
-                    <Text style={{ color: "#334155", fontWeight: "700" }}>Fechar</Text>
+                    <Text style={{ color: "#334155", fontWeight: "700" }}>{t("common.close")}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -584,13 +536,13 @@ export default function PredictionsScreen() {
                     {predictionMutation.isPending ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <Text style={{ color: "#fff", fontWeight: "700" }}>Salvar palpite</Text>
+                      <Text style={{ color: "#fff", fontWeight: "700" }}>{t("pred.saveButton")}</Text>
                     )}
                   </TouchableOpacity>
                 </View>
                 {selectedMatchLocked ? (
                   <Text style={{ marginTop: 10, fontSize: 12, color: "#B45309", textAlign: "center" }}>
-                    Este jogo ja iniciou. Alteracoes de palpite estao bloqueadas.
+                    {t("pred.lockedHint")}
                   </Text>
                 ) : null}
               </>

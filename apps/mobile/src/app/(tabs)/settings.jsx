@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -22,17 +22,16 @@ import {
   ChevronRight,
 } from "lucide-react-native";
 import { api } from "@/services/api";
+import { useI18n } from "@/i18n/useI18n";
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { isAuthenticated, signOut, signIn, auth } = useAuth();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
-
-  // Get user from auth
   const user = auth?.user;
 
-  // Fetch user settings
-  const { data: settingsData, isLoading } = useQuery({
+  const { data: settingsData } = useQuery({
     queryKey: ["user-settings"],
     queryFn: async () => {
       if (!isAuthenticated) return null;
@@ -42,7 +41,6 @@ export default function SettingsScreen() {
     enabled: isAuthenticated,
   });
 
-  // Update settings mutation
   const updateSettingsMutation = useMutation({
     mutationFn: async (settings) => {
       const response = await api.put("/user-settings", settings);
@@ -50,14 +48,13 @@ export default function SettingsScreen() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-settings"] });
-      Alert.alert("Sucesso", "Configurações salvas!");
+      Alert.alert(t("common.success"), t("settings.saveSuccess"));
     },
     onError: (error) => {
-      Alert.alert("Erro", error.message);
+      Alert.alert(t("common.error"), error.message);
     },
   });
 
-  // Sync FIFA data mutation
   const syncFifaMutation = useMutation({
     mutationFn: async () => {
       const response = await api.post("/sync-fifa");
@@ -66,10 +63,10 @@ export default function SettingsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["matches"] });
       queryClient.invalidateQueries({ queryKey: ["user-predictions"] });
-      Alert.alert("Sucesso", "Dados da FIFA sincronizados!");
+      Alert.alert(t("common.success"), t("settings.syncSuccess"));
     },
-    onError: (error) => {
-      Alert.alert("Erro", "Erro ao sincronizar dados da FIFA");
+    onError: () => {
+      Alert.alert(t("common.error"), t("settings.syncError"));
     },
   });
 
@@ -81,28 +78,21 @@ export default function SettingsScreen() {
     onSuccess: () => {
       queryClient.clear();
       signOut();
-      Alert.alert("Conta excluida", "Sua conta foi removida com sucesso.");
+      Alert.alert(t("settings.deletedTitle"), t("settings.deletedMessage"));
     },
     onError: (error) => {
-      const message =
-        error?.response?.data?.error || error?.message || "Falha ao excluir conta.";
-      Alert.alert("Erro", message);
+      const message = error?.response?.data?.error || error?.message || t("settings.deleteError");
+      Alert.alert(t("common.error"), message);
     },
   });
 
   const settings = settingsData?.settings;
 
   const handleLanguageChange = () => {
-    Alert.alert("Idioma", "Escolha seu idioma preferido:", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Português",
-        onPress: () => updateSettingsMutation.mutate({ language: "pt" }),
-      },
-      {
-        text: "English",
-        onPress: () => updateSettingsMutation.mutate({ language: "en" }),
-      },
+    Alert.alert(t("settings.languageTitle"), t("settings.languagePrompt"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("language.pt"), onPress: () => updateSettingsMutation.mutate({ language: "pt" }) },
+      { text: t("language.en"), onPress: () => updateSettingsMutation.mutate({ language: "en" }) },
     ]);
   };
 
@@ -111,55 +101,27 @@ export default function SettingsScreen() {
   };
 
   const handleSyncFifa = () => {
-    Alert.alert(
-      "Sincronizar dados",
-      "Deseja sincronizar os dados dos jogos com a FIFA?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Sincronizar",
-          onPress: () => syncFifaMutation.mutate(),
-        },
-      ],
-    );
+    Alert.alert(t("settings.syncTitle"), t("settings.syncPrompt"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("settings.syncAction"), onPress: () => syncFifaMutation.mutate() },
+    ]);
   };
 
   const handleSignOut = () => {
-    Alert.alert("Sair", "Tem certeza que deseja sair da sua conta?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sair",
-        style: "destructive",
-        onPress: signOut,
-      },
+    Alert.alert(t("settings.signOutTitle"), t("settings.signOutPrompt"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("settings.signOut"), style: "destructive", onPress: signOut },
     ]);
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      "Excluir conta",
-      "Essa acao e permanente e vai remover seus dados, palpites e amizades. Deseja continuar?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir conta",
-          style: "destructive",
-          onPress: () => deleteAccountMutation.mutate(),
-        },
-      ],
-    );
+    Alert.alert(t("settings.deleteTitle"), t("settings.deletePrompt"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("settings.deleteAccount"), style: "destructive", onPress: () => deleteAccountMutation.mutate() },
+    ]);
   };
 
-  const getLanguageText = (lang) => {
-    switch (lang) {
-      case "en":
-        return "English";
-      case "pt":
-        return "Português";
-      default:
-        return "Português";
-    }
-  };
+  const getLanguageText = (lang) => (lang === "en" ? t("language.en") : t("language.pt"));
 
   const SettingItem = ({ icon, title, subtitle, onPress, rightElement }) => (
     <TouchableOpacity
@@ -187,18 +149,10 @@ export default function SettingsScreen() {
       >
         {icon}
       </View>
-
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 16, fontWeight: "600", color: "#1F2937" }}>
-          {title}
-        </Text>
-        {subtitle && (
-          <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
-            {subtitle}
-          </Text>
-        )}
+        <Text style={{ fontSize: 16, fontWeight: "600", color: "#1F2937" }}>{title}</Text>
+        {subtitle ? <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>{subtitle}</Text> : null}
       </View>
-
       {rightElement || <ChevronRight size={20} color="#9CA3AF" />}
     </TouchableOpacity>
   );
@@ -207,7 +161,6 @@ export default function SettingsScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
         <StatusBar style="dark" />
-
         <View
           style={{
             paddingTop: insets.top + 16,
@@ -218,19 +171,10 @@ export default function SettingsScreen() {
             borderBottomColor: "#E5E7EB",
           }}
         >
-          <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>
-            ⚙️ Configurações
-          </Text>
+          <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>{t("settings.title")}</Text>
         </View>
 
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 32,
-          }}
-        >
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32 }}>
           <SettingsIcon size={64} color="#9CA3AF" />
           <Text
             style={{
@@ -241,18 +185,10 @@ export default function SettingsScreen() {
               textAlign: "center",
             }}
           >
-            Faça login para acessar configurações
+            {t("settings.loginTitle")}
           </Text>
-          <Text
-            style={{
-              fontSize: 14,
-              color: "#6B7280",
-              marginTop: 8,
-              textAlign: "center",
-              lineHeight: 20,
-            }}
-          >
-            Entre com sua conta Google para personalizar suas configurações
+          <Text style={{ fontSize: 14, color: "#6B7280", marginTop: 8, textAlign: "center", lineHeight: 20 }}>
+            {t("settings.loginHint")}
           </Text>
 
           <TouchableOpacity
@@ -265,9 +201,7 @@ export default function SettingsScreen() {
               marginTop: 24,
             }}
           >
-            <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>
-              Fazer login
-            </Text>
+            <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>{t("common.login")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -277,8 +211,6 @@ export default function SettingsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: "#F9FAFB" }}>
       <StatusBar style="dark" />
-
-      {/* Header */}
       <View
         style={{
           paddingTop: insets.top + 16,
@@ -289,16 +221,10 @@ export default function SettingsScreen() {
           borderBottomColor: "#E5E7EB",
         }}
       >
-        <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>
-          ⚙️ Configurações
-        </Text>
+        <Text style={{ fontSize: 24, fontWeight: "bold", color: "#1F2937" }}>{t("settings.title")}</Text>
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-      >
-        {/* User Profile Section */}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}>
         {user && (
           <View style={{ marginTop: 16 }}>
             <Text
@@ -311,9 +237,8 @@ export default function SettingsScreen() {
                 textTransform: "uppercase",
               }}
             >
-              Perfil
+              {t("settings.profile")}
             </Text>
-
             <View
               style={{
                 backgroundColor: "white",
@@ -340,43 +265,24 @@ export default function SettingsScreen() {
                   }}
                 >
                   {user.image ? (
-                    <Image
-                      source={{ uri: user.image }}
-                      style={{ width: 48, height: 48, borderRadius: 24 }}
-                    />
+                    <Image source={{ uri: user.image }} style={{ width: 48, height: 48, borderRadius: 24 }} />
                   ) : (
-                    <Text
-                      style={{
-                        color: "white",
-                        fontSize: 18,
-                        fontWeight: "bold",
-                      }}
-                    >
+                    <Text style={{ color: "white", fontSize: 18, fontWeight: "bold" }}>
                       {(user.name || user.email || "?").charAt(0).toUpperCase()}
                     </Text>
                   )}
                 </View>
-
                 <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: 18,
-                      fontWeight: "600",
-                      color: "#1F2937",
-                    }}
-                  >
-                    {user.name || "Usuário"}
+                  <Text style={{ fontSize: 18, fontWeight: "600", color: "#1F2937" }}>
+                    {user.name || t("settings.userFallback")}
                   </Text>
-                  <Text style={{ fontSize: 14, color: "#6B7280" }}>
-                    {user.email}
-                  </Text>
+                  <Text style={{ fontSize: 14, color: "#6B7280" }}>{user.email}</Text>
                 </View>
               </View>
             </View>
           </View>
         )}
 
-        {/* App Settings */}
         <View style={{ marginTop: 24 }}>
           <Text
             style={{
@@ -388,9 +294,8 @@ export default function SettingsScreen() {
               textTransform: "uppercase",
             }}
           >
-            Aplicativo
+            {t("settings.app")}
           </Text>
-
           <View
             style={{
               backgroundColor: "white",
@@ -406,15 +311,14 @@ export default function SettingsScreen() {
           >
             <SettingItem
               icon={<Globe size={24} color="#6B7280" />}
-              title="Idioma"
-              subtitle={`Atual: ${getLanguageText(settings?.language)}`}
+              title={t("settings.language")}
+              subtitle={t("settings.languageCurrent", { language: getLanguageText(settings?.language) })}
               onPress={handleLanguageChange}
             />
-
             <SettingItem
               icon={<Bell size={24} color="#6B7280" />}
-              title="Notificações"
-              subtitle="Receber notificações sobre jogos"
+              title={t("settings.notifications")}
+              subtitle={t("settings.notificationsHint")}
               rightElement={
                 <Switch
                   value={settings?.notifications_enabled ?? true}
@@ -427,7 +331,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Data Management */}
         <View style={{ marginTop: 24 }}>
           <Text
             style={{
@@ -439,9 +342,8 @@ export default function SettingsScreen() {
               textTransform: "uppercase",
             }}
           >
-            Dados
+            {t("settings.data")}
           </Text>
-
           <View
             style={{
               backgroundColor: "white",
@@ -457,14 +359,12 @@ export default function SettingsScreen() {
           >
             <SettingItem
               icon={<RefreshCw size={24} color="#6B7280" />}
-              title="Sincronizar FIFA"
-              subtitle="Atualizar jogos e placares"
+              title={t("settings.syncFifa")}
+              subtitle={t("settings.syncFifaHint")}
               onPress={handleSyncFifa}
               rightElement={
-                syncFifaMutation.isLoading ? (
-                  <Text style={{ color: "#6B7280", fontSize: 12 }}>
-                    Sincronizando...
-                  </Text>
+                syncFifaMutation.isPending ? (
+                  <Text style={{ color: "#6B7280", fontSize: 12 }}>{t("settings.syncing")}</Text>
                 ) : (
                   <ChevronRight size={20} color="#9CA3AF" />
                 )
@@ -473,7 +373,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* About */}
         <View style={{ marginTop: 24 }}>
           <Text
             style={{
@@ -485,9 +384,8 @@ export default function SettingsScreen() {
               textTransform: "uppercase",
             }}
           >
-            Sobre
+            {t("settings.about")}
           </Text>
-
           <View
             style={{
               backgroundColor: "white",
@@ -502,28 +400,14 @@ export default function SettingsScreen() {
             }}
           >
             <View style={{ alignItems: "center" }}>
-              <Text style={{ fontSize: 32, marginBottom: 8 }}>⚽</Text>
-              <Text
-                style={{ fontSize: 18, fontWeight: "bold", color: "#1F2937" }}
-              >
-                GolMaster
-              </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  color: "#6B7280",
-                  textAlign: "center",
-                  marginTop: 4,
-                }}
-              >
-                Seu app para acompanhar a Copa do Mundo 2026{"\n"}
-                Faça palpites, compita com amigos e divirta-se!
+              <Text style={{ fontSize: 18, fontWeight: "bold", color: "#1F2937" }}>GolMaster</Text>
+              <Text style={{ fontSize: 14, color: "#6B7280", textAlign: "center", marginTop: 4 }}>
+                {t("settings.aboutText")}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Sign Out */}
         <View style={{ marginTop: 24, marginHorizontal: 16 }}>
           <TouchableOpacity
             onPress={handleSignOut}
@@ -544,21 +428,14 @@ export default function SettingsScreen() {
             }}
           >
             <LogOut size={20} color="#DC2626" />
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                color: "#DC2626",
-                marginLeft: 8,
-              }}
-            >
-              Sair da conta
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#DC2626", marginLeft: 8 }}>
+              {t("settings.signOut")}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             onPress={handleDeleteAccount}
-            disabled={deleteAccountMutation.isLoading}
+            disabled={deleteAccountMutation.isPending}
             style={{
               marginTop: 12,
               backgroundColor: "white",
@@ -574,19 +451,12 @@ export default function SettingsScreen() {
               shadowOpacity: 0.1,
               shadowRadius: 4,
               elevation: 3,
-              opacity: deleteAccountMutation.isLoading ? 0.7 : 1,
+              opacity: deleteAccountMutation.isPending ? 0.7 : 1,
             }}
           >
             <Trash2 size={20} color="#B91C1C" />
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: "600",
-                color: "#B91C1C",
-                marginLeft: 8,
-              }}
-            >
-              {deleteAccountMutation.isLoading ? "Excluindo conta..." : "Excluir conta"}
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#B91C1C", marginLeft: 8 }}>
+              {deleteAccountMutation.isPending ? t("settings.deleting") : t("settings.deleteAccount")}
             </Text>
           </TouchableOpacity>
         </View>

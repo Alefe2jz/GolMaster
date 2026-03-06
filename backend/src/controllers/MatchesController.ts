@@ -4,9 +4,11 @@ import { prisma } from "../lib/prisma";
 type Lang = "pt" | "en";
 
 const TEAM_NAME_PT: Record<string, string> = {
+  "United States": "EUA",
   Mexico: "Mexico",
   "South Africa": "Africa do Sul",
   "Korea Republic": "Coreia do Sul",
+  "Korea DPR": "Coreia do Norte",
   Canada: "Canada",
   Paraguay: "Paraguai",
   Haiti: "Haiti",
@@ -53,6 +55,24 @@ const TEAM_NAME_PT: Record<string, string> = {
   "IC Winner 2": "Vencedor Intercontinental 2",
   TBD: "Sem agenda marcada",
 };
+
+const normalizeText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[â€™’]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+const TEAM_NAME_EN_BY_NORMALIZED: Record<string, string> = Object.entries(TEAM_NAME_PT).reduce(
+  (acc, [en, pt]) => {
+    acc[normalizeText(en)] = en;
+    acc[normalizeText(pt)] = en;
+    return acc;
+  },
+  {} as Record<string, string>
+);
 
 const STAGE_LABELS: Record<string, { pt: string; en: string }> = {
   group_stage: { pt: "Fase de grupos", en: "Group Stage" },
@@ -126,13 +146,62 @@ const parseStatusFilter = (raw?: string | null) => {
   return entry ? entry[0] : raw;
 };
 
-const localizeTeamName = (name: string, lang: Lang) => {
-  if (lang === "en") {
-    if (name === "Sem agenda marcada") return "No schedule set";
-    if (name === "TBD") return "No schedule set";
-    return name;
+const parseDynamicTeamPlaceholder = (rawName: string) => {
+  const name = normalizeText(rawName);
+
+  const groupWinnerPatterns = [
+    /^winner(?:\s+of)?\s+group\s+([a-l])$/,
+    /^group\s+([a-l])\s+winner$/,
+    /^winner\s+group\s+([a-l])$/,
+    /^vencedor(?:es)?\s+(?:do|da)\s+grupo\s+([a-l])$/,
+  ];
+  for (const pattern of groupWinnerPatterns) {
+    const groupWinner = name.match(pattern);
+    const letter = groupWinner?.[1]?.toUpperCase() || "";
+    if (letter) return { type: "group_winner" as const, letter };
   }
-  return TEAM_NAME_PT[name] || name;
+
+  const uefaWinner = name.match(/^uefa\s+winner\s+([a-d])$|^vencedor\s+uefa\s+([a-d])$/);
+  if (uefaWinner) {
+    const slot = (uefaWinner[1] || uefaWinner[2] || "").toUpperCase();
+    if (slot) return { type: "uefa_winner" as const, slot };
+  }
+
+  const icWinner = name.match(
+    /^(?:ic|intercontinental)\s+winner\s+(\d+)$|^vencedor\s+intercontinental\s+(\d+)$/
+  );
+  if (icWinner) {
+    const slot = icWinner[1] || icWinner[2];
+    if (slot) return { type: "ic_winner" as const, slot };
+  }
+
+  return null;
+};
+
+const localizeTeamName = (name: string, lang: Lang) => {
+  const normalized = normalizeText(name);
+  if (normalized === "sem agenda marcada" || normalized === "tbd") {
+    return lang === "en" ? "No schedule set" : "Sem agenda marcada";
+  }
+
+  const dynamic = parseDynamicTeamPlaceholder(name);
+  if (dynamic) {
+    if (dynamic.type === "group_winner") {
+      return lang === "en"
+        ? `Winner of Group ${dynamic.letter}`
+        : `Vencedor do Grupo ${dynamic.letter}`;
+    }
+    if (dynamic.type === "uefa_winner") {
+      return lang === "en" ? `UEFA Winner ${dynamic.slot}` : `Vencedor UEFA ${dynamic.slot}`;
+    }
+    return lang === "en"
+      ? `IC Winner ${dynamic.slot}`
+      : `Vencedor Intercontinental ${dynamic.slot}`;
+  }
+
+  const englishName = TEAM_NAME_EN_BY_NORMALIZED[normalized] || name;
+  if (lang === "en") return englishName;
+  return TEAM_NAME_PT[englishName] || name;
 };
 
 const localizeStage = (stage: string, lang: Lang) => STAGE_LABELS[stage]?.[lang] || stage;
